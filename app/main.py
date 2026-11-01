@@ -1,7 +1,10 @@
+import hashlib
+import hmac
 import json
 import os
 import re
 import secrets
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
@@ -71,11 +74,36 @@ async def auth(request: Request, call_next):
     if path == "/" or path.startswith(PUBLIC_PATHS):
         return await call_next(request)
     if not db.business():
-        return RedirectResponse("/setup", status_code=303)
-    token = request.cookies.get(SESSION_COOKIE)
-    if not token or not db.row("SELECT 1 FROM sessions WHERE token = ?", (token,)):
+        if not demo_enabled():
+            return RedirectResponse("/setup", status_code=303)
+        _ensure_demo()  # a fresh Vercel instance: rebuild the same demo book before serving
+    mobile = _session_mobile(request)
+    if not mobile or mobile != db.business()["owner_mobile"]:
         return RedirectResponse("/login", status_code=303)
     return await call_next(request)
+
+
+# Sessions are signed cookies rather than database rows, so they keep working across
+# Vercel instances that each have their own temporary database.
+
+def _session_secret():
+    secret = os.environ.get("DHANDA_SESSION_SECRET") or os.environ.get("DHANDA_WEBHOOK_SECRET")
+    return (secret or "dhanda-" + os.environ.get("VERCEL_PROJECT_ID", str(db.DB_PATH))).encode()
+
+
+def _sign(payload):
+    return hmac.new(_session_secret(), payload.encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def _session_mobile(request):
+    token = request.cookies.get(SESSION_COOKIE, "")
+    try:
+        mobile, expires, sig = token.split(".")
+    except ValueError:
+        return None
+    if not hmac.compare_digest(sig, _sign(f"{mobile}.{expires}")) or int(expires) < time.time():
+        return None
+    return mobile
 
 
 def render(request, name, **ctx):
@@ -114,8 +142,8 @@ def setup(request: Request, business_name: str = Form(...), owner_name: str = Fo
 
 
 def _start_session(mobile, days=14):
-    token = secrets.token_urlsafe(32)
-    db.execute("INSERT INTO sessions (token, mobile, created_at) VALUES (?,?,?)", (token, mobile, calling.now()))
+    expires = int(time.time()) + 60 * 60 * 24 * days
+    token = f"{mobile}.{expires}.{_sign(f'{mobile}.{expires}')}"
     resp = RedirectResponse("/dashboard", status_code=303)
     resp.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax", max_age=60 * 60 * 24 * days)
     return resp
@@ -158,7 +186,6 @@ def verify_otp(request: Request, mobile: str = Form(...), code: str = Form(...))
 
 @app.get("/logout")
 def logout(request: Request):
-    db.execute("DELETE FROM sessions WHERE token = ?", (request.cookies.get(SESSION_COOKIE, ""),))
     resp = RedirectResponse("/login", status_code=303)
     resp.delete_cookie(SESSION_COOKIE)
     return resp
@@ -182,8 +209,8 @@ def call_stats(calls):
 
 
 def _logged_in(request):
-    token = request.cookies.get(SESSION_COOKIE)
-    return bool(token and db.row("SELECT 1 FROM sessions WHERE token = ?", (token,)))
+    b = db.business()
+    return bool(b and _session_mobile(request) == b["owner_mobile"])
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -193,6 +220,16 @@ def home(request: Request):
         "demo": demo_enabled()})
 
 
+def _ensure_demo():
+    """The same demo book every time (fixed seed), so every instance shows identical data."""
+    if db.business():
+        return
+    sample_data.generate("Sandhu Traders", "Harpreet Sandhu", DEMO_MOBILE, "Ludhiana", "Busy", [], seed=2026)
+    overdue = [r["id"] for r in ledger.retailer_summaries() if r["overdue"] > 0]
+    calling.launch_campaign("Reminder round, 1st week", overdue[: len(overdue) // 2], "10:00", "19:00",
+                            upsell=True, live=False)
+
+
 @app.get("/demo")
 def demo(request: Request):
     """One click into a ready-made sample business, for showing Dhanda AI to customers."""
@@ -200,10 +237,7 @@ def demo(request: Request):
         return RedirectResponse("/setup", status_code=303)
     b = db.business()
     if not b:
-        sample_data.generate("Sandhu Traders", "Harpreet Sandhu", DEMO_MOBILE, "Ludhiana", "Busy", [], seed=2026)
-        overdue = [r["id"] for r in ledger.retailer_summaries() if r["overdue"] > 0]
-        calling.launch_campaign("Reminder round, 1st week", overdue[: len(overdue) // 2], "10:00", "19:00",
-                                upsell=True, live=False)
+        _ensure_demo()
     elif b["owner_mobile"] != DEMO_MOBILE:
         return RedirectResponse("/login", status_code=303)
     return _start_session(DEMO_MOBILE, days=1)
