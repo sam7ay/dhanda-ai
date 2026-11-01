@@ -102,7 +102,8 @@ def launch_campaign(name, retailer_ids, window_start, window_end, upsell, live, 
             "user_phone_number": dialed,
             "user_identifier": f"{db.tenant()}-call-{call_id}",
             "app_variables": variables,
-            "app_overrides": {"initial_language_name": r["language"]},
+            # Test phones are real people, not the sample shop: open in Hindi and let the agent follow them.
+            "app_overrides": {"initial_language_name": "Hindi"},
         } for call_id, r, dialed, variables in queued]
         cohort_ids = []
         for start in range(0, len(users), 1000):
@@ -130,7 +131,7 @@ def call_now(retailer_id, live):
     dialed = contact["mobile"]
     call_id, variables = _queue_call(r, business, dialed, "live", True, contact=contact)
     try:
-        resp = sarvam_va.instant_call(dialed, variables, r["language"],
+        resp = sarvam_va.instant_call(dialed, variables, "Hindi",
                                       public_base_url=public_base_url(),
                                       metadata={"call_id": call_id, "tenant": db.tenant(), "token": webhook_secret()})
         db.execute("UPDATE calls SET status = 'dialing', sarvam_attempt_id = ? WHERE id = ?",
