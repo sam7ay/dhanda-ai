@@ -50,6 +50,7 @@
     <details class="more">
       <summary>For your technical team</summary>
       <p class="small muted">Calls run on Sarvam Voice Agents. Set these in the server's environment and restart.</p>
+      <p class="small">{% if key_check %}<span class="badge b-failed">Sarvam connection</span> {{ key_check }}{% else %}<span class="badge b-low">Sarvam connection OK</span> The API key, org and workspace work.{% endif %}</p>
       <dl class="kv small">
         {% for k, v in missing.items() %}<dt><code>{{ k }}</code></dt><dd>{{ v }}</dd>{% else %}<dt>Sarvam</dt><dd>All set</dd>{% endfor %}
       </dl>
