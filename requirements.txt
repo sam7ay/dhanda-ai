@@ -1,0 +1,7 @@
+sarvamai
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+httpx
+openpyxl

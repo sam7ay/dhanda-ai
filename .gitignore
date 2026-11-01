@@ -1,0 +1,7 @@
+.env
+data/
+__pycache__/
+.claude/
+.DS_Store
+chat.py
+property-call-agent.md
