@@ -60,7 +60,7 @@ def _webhook(public_base_url, metadata):
     return {"url": public_base_url.rstrip("/") + "/webhooks/sarvam", "metadata": metadata}
 
 
-def create_campaign(name, window_start, window_end, days, public_base_url=None, metadata=None):
+def create_campaign(name, window_start, window_end, days, public_base_url=None, metadata=None, every_day=False):
     now = datetime.now(timezone.utc)
     app_config = {
         "app_id": _cfg("SARVAM_APP_ID"),
@@ -86,7 +86,8 @@ def create_campaign(name, window_start, window_end, days, public_base_url=None, 
         "allowed_schedule": {
             "allowed_start_time": window_start,
             "allowed_end_time": window_end,
-            "allowed_days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+            "allowed_days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+                            + (["Sunday"] if every_day else []),
             "timezone": "Asia/Kolkata",
         },
     }

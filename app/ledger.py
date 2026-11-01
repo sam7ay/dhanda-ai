@@ -138,6 +138,23 @@ def normalise_mobile(raw):
     return None
 
 
+def parse_contacts(text):
+    """'Rakesh, 98765 43210' per line (name optional) → [{"name", "mobile"}]. Raises ValueError on a bad line."""
+    contacts = []
+    for line in str(text or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        match = re.search(r"(\+?[\d][\d\s-]{8,}\d)", line)
+        mobile = normalise_mobile(match.group(1)) if match else None
+        if not mobile:
+            raise ValueError(f"'{line}' doesn't have a valid Indian mobile number.")
+        name = (line[:match.start()] + line[match.end():]).strip(" ,;:-\t")
+        if mobile not in {c["mobile"] for c in contacts}:
+            contacts.append({"name": name, "mobile": mobile})
+    return contacts
+
+
 def inr(value):
     value = round(value)
     s = str(abs(value))

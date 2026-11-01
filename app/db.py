@@ -113,7 +113,10 @@ CREATE TABLE IF NOT EXISTS calls (
 
 def connect():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    fresh = not DB_PATH.exists()
     conn = sqlite3.connect(DB_PATH)
+    if fresh:  # the file can disappear under a running server (e.g. /tmp cleanup on Vercel)
+        conn.executescript(SCHEMA)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
@@ -156,5 +159,12 @@ def execute(sql, params=()):
 def business():
     b = row("SELECT * FROM business WHERE id = 1")
     if b:
-        b["test_numbers"] = json.loads(b["test_numbers"])
+        # Test contacts: [{"name", "mobile"}]. Older rows stored bare numbers.
+        b["test_numbers"] = [c if isinstance(c, dict) else {"name": "", "mobile": c}
+                             for c in json.loads(b["test_numbers"])]
+        if not b["test_numbers"] and os.environ.get("DHANDA_TEST_CONTACTS"):
+            # On Vercel the database resets, so test contacts can live in an environment variable instead
+            # ("Rakesh, 98765 43210; Simran, 91234 56789").
+            from .ledger import parse_contacts
+            b["test_numbers"] = parse_contacts(os.environ["DHANDA_TEST_CONTACTS"].replace(";", "\n"))
     return b

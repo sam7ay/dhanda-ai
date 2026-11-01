@@ -18,6 +18,7 @@ OUTCOMES = {
     "busy": "Busy",
     "failed": "Call failed",
 }
+DEMO_MOBILE = "+919876543210"
 CONTACTED = ("promised", "partial", "already_paid", "dispute", "callback", "refused", "transferred")
 
 
@@ -29,8 +30,15 @@ def webhook_secret():
     return os.environ.get("DHANDA_WEBHOOK_SECRET", "")
 
 
-def _queue_call(retailer, business, dialed, mode, upsell, campaign_id=None):
+def _queue_call(retailer, business, dialed, mode, upsell, campaign_id=None, contact=None):
     variables = ledger.agent_variables(retailer, business, upsell=upsell)
+    if os.environ.get("DHANDA_OWNER_MOBILE"):
+        variables["owner_mobile"] = os.environ["DHANDA_OWNER_MOBILE"]
+    elif business["owner_mobile"] == DEMO_MOBILE:
+        variables["owner_mobile"] = ""  # never hand a real call to the demo account's placeholder number
+    if contact and contact.get("name"):
+        # A real person is answering a sample retailer's call, so greet them by their own name.
+        variables["retailer_name"] = contact["name"].split()[0]
     call_id = db.execute(
         "INSERT INTO calls (campaign_id, retailer_id, dialed_number, mode, status, created_at, variables)"
         " VALUES (?,?,?,?,?,?,?)",
@@ -39,34 +47,43 @@ def _queue_call(retailer, business, dialed, mode, upsell, campaign_id=None):
     return call_id, variables
 
 
-def _test_number_cycle(business):
-    numbers = business["test_numbers"]
-    if not numbers:
+def _test_contacts(business):
+    contacts = business["test_numbers"]
+    if not contacts:
         raise ValueError("Add at least one test phone number in Settings first. "
-                         "In sample-data mode every call goes to a test number, never to a sample retailer.")
-    i = 0
-    while True:
-        yield numbers[i % len(numbers)]
-        i += 1
+                         "Real calls only ever go to your test phones.")
+    return contacts
 
 
-def launch_campaign(name, retailer_ids, window_start, window_end, upsell, live):
+def public_base_url():
+    """Where Sarvam posts call results. On Vercel this defaults to the production URL."""
+    if os.environ.get("PUBLIC_BASE_URL"):
+        return os.environ["PUBLIC_BASE_URL"]
+    prod = os.environ.get("VERCEL_PROJECT_PRODUCTION_URL")
+    return f"https://{prod}" if prod else None
+
+
+def launch_campaign(name, retailer_ids, window_start, window_end, upsell, live, every_day=False):
     business = db.business()
     summaries = {r["id"]: r for r in ledger.retailer_summaries()}
     targets = [summaries[i] for i in retailer_ids if i in summaries]
     if not targets:
         raise ValueError("Pick at least one retailer.")
+    contacts = _test_contacts(business) if live else None
+    if live:
+        # One call per test phone: each person hears one retailer's reminder, never several.
+        targets = targets[:len(contacts)]
     mode = "live" if live else "simulated"
     campaign_id = db.execute(
         "INSERT INTO campaigns (name, mode, status, created_at, window_start, window_end, upsell)"
         " VALUES (?,?,?,?,?,?,?)",
         (name, mode, "preparing", now(), window_start, window_end, int(upsell)),
     )
-    numbers = _test_number_cycle(business) if live else None
     queued = []
-    for r in targets:
-        dialed = next(numbers) if live else r["phone"]
-        call_id, variables = _queue_call(r, business, dialed, mode, upsell, campaign_id)
+    for i, r in enumerate(targets):
+        contact = contacts[i] if live else None
+        dialed = contact["mobile"] if live else r["phone"]
+        call_id, variables = _queue_call(r, business, dialed, mode, upsell, campaign_id, contact)
         queued.append((call_id, r, dialed, variables))
 
     if not live:
@@ -77,8 +94,8 @@ def launch_campaign(name, retailer_ids, window_start, window_end, upsell, live):
 
     try:
         created = sarvam_va.create_campaign(
-            f"{name} #{campaign_id}", window_start, window_end, days=7,
-            public_base_url=os.environ.get("PUBLIC_BASE_URL"),
+            f"{name} #{campaign_id}", window_start, window_end, days=7, every_day=every_day,
+            public_base_url=public_base_url(),
             metadata={"dhanda_campaign": campaign_id, "token": webhook_secret()},
         )
         sarvam_id = created["campaign_id"]
@@ -110,11 +127,12 @@ def call_now(retailer_id, live):
         call_id, variables = _queue_call(r, business, r["phone"], "simulated", True)
         simulate(call_id, r, variables)
         return call_id
-    dialed = next(_test_number_cycle(business))
-    call_id, variables = _queue_call(r, business, dialed, "live", True)
+    contact = _test_contacts(business)[0]
+    dialed = contact["mobile"]
+    call_id, variables = _queue_call(r, business, dialed, "live", True, contact=contact)
     try:
         resp = sarvam_va.instant_call(dialed, variables, r["language"],
-                                      public_base_url=os.environ.get("PUBLIC_BASE_URL"),
+                                      public_base_url=public_base_url(),
                                       metadata={"call_id": call_id, "token": webhook_secret()})
         db.execute("UPDATE calls SET status = 'dialing', sarvam_attempt_id = ? WHERE id = ?",
                    (resp["attempt_id"], call_id))
@@ -131,18 +149,23 @@ def _amount(value):
         return None
 
 
+def outcome_from(connectivity, variables, ended_by=None):
+    variables = variables or {}
+    if connectivity in ("busy", "no_answer", "failed"):
+        return connectivity
+    if not connectivity:
+        return None
+    if ended_by == "CALL_TRANSFER" or str(variables.get("call_transferred", "")).lower() == "yes":
+        return "transferred"
+    outcome = variables.get("payment_status")
+    return outcome if outcome in OUTCOMES else "callback"
+
+
 def apply_result(call_id, *, connectivity, duration, language, variables, transcript, ended_by=None,
                  attempt_id=None, final=True):
     """Store one call outcome from a Sarvam webhook or the analytics API."""
     variables = variables or {}
-    status_map = {"connected": None, "busy": "busy", "no_answer": "no_answer", "failed": "failed"}
-    outcome = status_map.get(connectivity)
-    if outcome is None:
-        outcome = variables.get("payment_status") or "callback"
-        if ended_by == "CALL_TRANSFER" or str(variables.get("call_transferred", "")).lower() == "yes":
-            outcome = "transferred"
-        if outcome not in OUTCOMES:
-            outcome = "callback"
+    outcome = outcome_from(connectivity, variables, ended_by)
     db.execute(
         """UPDATE calls SET status = ?, connectivity = ?, duration = ?, language = ?, outcome = ?,
                promised_amount = ?, promised_date = ?, upsell_interest = ?, products_interested = ?,

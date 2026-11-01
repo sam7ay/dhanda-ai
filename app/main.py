@@ -32,7 +32,7 @@ templates.env.globals["OUTCOMES"] = calling.OUTCOMES
 
 SESSION_COOKIE = "dhanda_session"
 PUBLIC_PATHS = ("/static", "/setup", "/login", "/webhooks", "/demo")
-DEMO_MOBILE = "+919876543210"
+DEMO_MOBILE = calling.DEMO_MOBILE
 
 
 def demo_enabled():
@@ -102,7 +102,10 @@ def setup(request: Request, business_name: str = Form(...), owner_name: str = Fo
     if db.business():
         return RedirectResponse("/login", status_code=303)
     mobile = normalise_mobile(owner_mobile)
-    tests = [n for n in (normalise_mobile(t) for t in re.split(r"[,\n]", test_numbers)) if n]
+    try:
+        tests = ledger.parse_contacts(test_numbers)
+    except ValueError:
+        tests = []
     if not mobile:
         return templates.TemplateResponse(request, "setup.html", {
             "request": request, "error": "Enter a valid 10-digit Indian mobile number."})
@@ -197,7 +200,7 @@ def demo(request: Request):
         return RedirectResponse("/setup", status_code=303)
     b = db.business()
     if not b:
-        sample_data.generate("Sandhu Traders", "Harpreet Sandhu", DEMO_MOBILE, "Ludhiana", "Busy", [])
+        sample_data.generate("Sandhu Traders", "Harpreet Sandhu", DEMO_MOBILE, "Ludhiana", "Busy", [], seed=2026)
         overdue = [r["id"] for r in ledger.retailer_summaries() if r["overdue"] > 0]
         calling.launch_campaign("Reminder round, 1st week", overdue[: len(overdue) // 2], "10:00", "19:00",
                                 upsell=True, live=False)
@@ -311,7 +314,8 @@ async def campaign_create(request: Request):
     try:
         cid = calling.launch_campaign(form.get("name") or "Payment reminders", ids,
                                       form.get("window_start") or "10:00", form.get("window_end") or "19:00",
-                                      upsell=form.get("upsell") == "1", live=live)
+                                      upsell=form.get("upsell") == "1", live=live,
+                                      every_day=form.get("every_day") == "1")
     except ValueError as exc:
         return go("/settings", error=exc)
     return RedirectResponse(f"/campaigns/{cid}", status_code=303)
@@ -396,10 +400,10 @@ def settings_save(business_name: str = Form(...), owner_name: str = Form(...), o
     mobile = normalise_mobile(owner_mobile)
     if not mobile:
         return go("/settings", error="Enter a valid 10-digit owner mobile.")
-    raw = [t for t in re.split(r"[,\n]", test_numbers) if t.strip()]
-    tests = [normalise_mobile(t) for t in raw]
-    if None in tests:
-        return go("/settings", error="One of the test numbers isn't a valid Indian mobile.")
+    try:
+        tests = ledger.parse_contacts(test_numbers)
+    except ValueError as exc:
+        return go("/settings", error=exc)
     db.execute("UPDATE business SET name = ?, owner_name = ?, owner_mobile = ?, erp = ?, test_numbers = ? WHERE id = 1",
                (business_name.strip(), owner_name.strip(), mobile, erp, json.dumps(tests)))
     return RedirectResponse("/settings?saved=1", status_code=303)
@@ -419,6 +423,66 @@ def agent(request: Request):
     sample = max(sample, key=lambda r: r["overdue"]) if sample else None
     return render(request, "agent.html", prompt=prompt,
                   variables=ledger.agent_variables(sample, db.business()) if sample else {})
+
+
+# ---------- Live calls ----------
+
+_live_cache = {"at": 0.0, "items": [], "error": None}
+
+
+def _live_attempts():
+    """Recent attempts straight from Sarvam (cached a few seconds), so the view survives server restarts."""
+    import time
+    if time.time() - _live_cache["at"] < 5:
+        return _live_cache["items"], _live_cache["error"]
+    items, error = [], None
+    try:
+        calling.sync_live_results()
+        since = datetime.now(timezone.utc) - timedelta(hours=24)
+        for a in sorted(sarvam_va.list_attempts(since), key=lambda a: a.get("attempted_at") or "", reverse=True):
+            v = a.get("agent_variables") or {}
+            items.append({
+                "when": a.get("attempted_at"), "phone": a.get("user_contact_masked") or "",
+                "shop": v.get("shop_name") or "—", "name": v.get("retailer_name") or "",
+                "connectivity": a.get("connectivity_status") or "", "duration": a.get("duration_in_seconds") or 0,
+                "language": a.get("language_name") or "", "ended_by": a.get("ended_by") or "",
+                "outcome": calling.outcome_from(a.get("connectivity_status"), v, a.get("ended_by")),
+                "promised_amount": v.get("promised_amount") or "", "promised_date": v.get("promised_date") or "",
+                "upsell": v.get("upsell_interest") or "", "summary": v.get("call_summary") or "",
+                "interaction_id": a.get("interaction_id") or "", "retry": a.get("next_action_status") or "",
+            })
+    except sarvam_va.SarvamError as exc:
+        error = str(exc)
+    _live_cache.update(at=time.time(), items=items, error=error)
+    return items, error
+
+
+@app.get("/live", response_class=HTMLResponse)
+def live(request: Request):
+    return render(request, "live.html")
+
+
+@app.get("/api/live")
+def live_api():
+    pending = db.rows("""SELECT c.id, c.created_at, c.dialed_number, c.status, r.shop_name FROM calls c
+                         JOIN retailers r ON r.id = c.retailer_id
+                         WHERE c.mode = 'live' AND c.status IN ('queued', 'scheduled', 'dialing', 'retrying')
+                         ORDER BY c.id DESC LIMIT 50""")
+    for p in pending:
+        p["dialed_number"] = (p["dialed_number"][:3] + "•••••" + p["dialed_number"][-4:]) if p["dialed_number"] else ""
+    if not sarvam_va.configured():
+        return JSONResponse({"configured": False, "pending": pending, "attempts": [], "error": None})
+    attempts, error = _live_attempts()
+    return JSONResponse({"configured": True, "pending": pending, "attempts": attempts, "error": error,
+                         "outcomes": calling.OUTCOMES})
+
+
+@app.get("/api/live/transcript")
+def live_transcript(interaction_id: str):
+    try:
+        return JSONResponse({"messages": sarvam_va.get_transcript(interaction_id)})
+    except sarvam_va.SarvamError as exc:
+        return JSONResponse({"messages": [], "error": str(exc)})
 
 
 # ---------- ERP import ----------
