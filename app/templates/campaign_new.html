@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}New campaign{% endblock %}
+{% block content %}
+<div class="head">
+  <div><div class="crumb"><a href="/campaigns">Reminder calls</a> / New</div><h1>Start reminder calls</h1>
+    <div class="muted" style="font-size:17px">Tick the shops to call. The assistant asks each one for a payment date, in Hindi or Punjabi.</div></div>
+</div>
+
+<form method="post" action="/campaigns" class="grid g-wide" id="campaign-form">
+  <div class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <h2 style="margin:0">Who to call <span class="muted" id="count"></span></h2>
+      <div class="row small">
+        <a class="badge {{ 'b-transferred' if min_days == 1 and not risk }}" href="/campaigns/new?min_days=1">All overdue</a>
+        <a class="badge {{ 'b-transferred' if min_days == 30 }}" href="/campaigns/new?min_days=30">30+ days late</a>
+        <a class="badge {{ 'b-transferred' if min_days == 60 }}" href="/campaigns/new?min_days=60">60+ days late</a>
+        <a class="badge {{ 'b-transferred' if risk == 'High' }}" href="/campaigns/new?risk=High">Most at risk</a>
+      </div>
+    </div>
+    <div class="table-wrap"><table>
+      <tr><th><input type="checkbox" id="all" checked aria-label="Select all"></th><th>Retailer</th><th>Language</th><th class="right">Overdue</th><th class="right">Days</th><th>Suggest products</th></tr>
+      {% for r in retailers %}
+      <tr>
+        <td><input type="checkbox" name="retailer_ids" value="{{ r.id }}" checked data-amount="{{ r.overdue }}"></td>
+        <td><b>{{ r.shop_name }}</b><div class="sub">{{ r.city }}</div></td>
+        <td>{{ r.language }}</td>
+        <td class="right num">{{ r.overdue | inr }}</td>
+        <td class="right num">{{ r.max_days_overdue }}</td>
+        <td>{% if r.upsell_ok %}<span class="badge b-low">Yes</span>{% else %}<span class="badge">Only payment</span>{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">No overdue retailers match this filter.</td></tr>
+      {% endfor %}
+    </table></div>
+  </div>
+
+  <div class="stack">
+    <div class="card">
+      <div class="field"><label>Name this round</label><input type="text" name="name" value="{{ default_name }}"></div>
+      <div class="field"><label>Call between</label>
+        <div class="row"><input type="time" name="window_start" value="10:00" style="width:auto"> to <input type="time" name="window_end" value="19:00" style="width:auto"></div>
+        <div class="hint">Monday to Saturday only.</div></div>
+      <div class="field"><label class="check"><input type="checkbox" name="upsell" value="1" checked><span>Also suggest products to reorder<small class="hint" style="display:block;font-weight:500">Only after payment is discussed, and never to shops that are very late.</small></span></label></div>
+      <div class="field"><label>How should we call?</label>
+        <div class="choice">
+          <label><input type="radio" name="mode" value="simulated" {{ 'checked' if not live_ready }}><span>Practice run<small>See exactly what would happen. No phones ring.</small></span></label>
+          <label class="{{ 'off' if not live_ready }}"><input type="radio" name="mode" value="live" {{ 'checked' if live_ready }} {{ 'disabled' if not live_ready }}><span>Real calls to my test phone<small>{% if live_ready %}Every call rings {{ business.test_numbers|map('mask')|join(', ') }} so you can hear it yourself.{% else %}Needs your calling line switched on. <a href="/settings">Settings</a>{% endif %}</small></span></label>
+        </div>
+      </div>
+      <div class="field" style="border-top:1px solid var(--border);padding-top:14px">
+        <div class="row" style="justify-content:space-between"><span class="muted">Overdue across these shops</span><b class="num" id="total">—</b></div>
+        <button class="btn primary big block" style="margin-top:14px" {{ 'disabled' if not retailers }}>📞 Start calling</button>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+  const boxes = [...document.querySelectorAll("input[name=retailer_ids]")];
+  const fmt = n => "₹" + Math.round(n).toLocaleString("en-IN");
+  function update() {
+    const on = boxes.filter(b => b.checked);
+    document.getElementById("count").textContent = `· ${on.length} selected`;
+    document.getElementById("total").textContent = fmt(on.reduce((s, b) => s + Number(b.dataset.amount), 0));
+  }
+  document.getElementById("all").addEventListener("change", e => { boxes.forEach(b => b.checked = e.target.checked); update(); });
+  boxes.forEach(b => b.addEventListener("change", update));
+  update();
+</script>
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}{{ r.shop_name }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <div class="crumb"><a href="/retailers">Retailers</a> / {{ r.code }}</div>
+    <h1>{{ r.shop_name }}</h1>
+    <div class="muted" style="font-size:17px">{{ r.owner_name if r.owner_name != r.shop_name }}{{ " · " if r.owner_name != r.shop_name }}{{ r.city }} · speaks {{ r.language }} · {% if r.phone %}{{ r.phone | mask }}{% else %}<span style="color:var(--warn)">no mobile number</span>{% endif %}</div>
+  </div>
+  <form method="post" action="/retailers/{{ r.id }}/call" class="row">
+    {% if live_ready %}
+      <select name="live" style="width:auto"><option value="">Practice call</option><option value="1">Real call to my test phone</option></select>
+    {% endif %}
+    <button class="btn primary big">📞 Call now</button>
+  </form>
+</div>
+
+<div class="grid g4">
+  <div class="card kpi"><div class="label">Outstanding</div><div class="value">{{ r.outstanding | inr }}</div><div class="sub">{{ r.open_invoices }} open bills</div></div>
+  <div class="card kpi"><div class="label">Overdue</div><div class="value" style="color:var(--danger)">{{ r.overdue | inr }}</div><div class="sub">oldest {{ r.max_days_overdue }} days past due</div></div>
+  <div class="card kpi"><div class="label">Credit limit used</div><div class="value">{{ (r.utilisation * 100) | round | int }}%</div><div class="sub">of {{ r.credit_limit | inr }}</div></div>
+  <div class="card kpi"><div class="label">Last payment</div><div class="value">{{ r.last_payment_amount | inr if r.last_payment else '—' }}</div><div class="sub">{{ r.last_payment | date }}</div></div>
+</div>
+
+<div class="grid g-wide" style="margin-top:16px">
+  <div class="stack">
+    <div class="card">
+      <h2>Open bills</h2>
+      <div class="table-wrap"><table>
+        <tr><th>Bill</th><th>Date</th><th>Due</th><th class="right">Amount</th><th class="right">Balance</th><th class="right">Days overdue</th></tr>
+        {% for inv in invoices %}
+        <tr><td>{{ inv.number }}</td><td>{{ inv.date | date }}</td><td>{{ inv.due_date | date }}</td>
+          <td class="right num">{{ inv.amount | inr }}</td><td class="right num"><b>{{ inv.balance | inr }}</b></td>
+          <td class="right num">{% if inv.days_overdue %}<span class="badge {{ 'b-high' if inv.days_overdue > 60 else 'b-medium' }}">{{ inv.days_overdue }}</span>{% else %}<span class="faint">not due</span>{% endif %}</td></tr>
+        {% else %}<tr><td colspan="6" class="empty">Nothing outstanding.</td></tr>{% endfor %}
+      </table></div>
+    </div>
+    <div class="card">
+      <h2>What they buy</h2>
+      <div class="table-wrap"><table>
+        <tr><th>Product</th><th>Category</th><th class="right">Orders</th><th class="right">Value (6 mo)</th><th>Last bought</th></tr>
+        {% for s in history[:10] %}
+        <tr><td>{{ s.name }}</td><td class="muted">{{ s.category }}</td><td class="right num">{{ s.times }}</td><td class="right num">{{ s.value | inr }}</td><td>{{ s.last_bought | date }}</td></tr>
+        {% endfor %}
+      </table></div>
+    </div>
+    <div class="card">
+      <h2>Calls</h2>
+      {% if calls %}
+      <div class="table-wrap"><table>
+        <tr><th>When</th><th>Outcome</th><th class="right">Promised</th><th>By</th><th>Mode</th></tr>
+        {% for c in calls %}
+        <tr class="click" data-href="/calls/{{ c.id }}"><td>{{ c.created_at | date("%d %b, %I:%M %p") }}</td>
+          <td><span class="badge b-{{ c.outcome or c.status }}">{{ OUTCOMES.get(c.outcome, c.status|capitalize) }}</span></td>
+          <td class="right num">{{ c.promised_amount | inr if c.promised_amount else '—' }}</td><td>{{ c.promised_date | date }}</td>
+          <td><span class="badge b-{{ c.mode }}">{{ c.mode|capitalize }}</span></td></tr>
+        {% endfor %}
+      </table></div>
+      {% else %}<div class="empty">Not called yet.</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card">
+      <h2>Products the assistant will suggest</h2>
+      {% if not upsell_ok %}
+        <div class="alert info">This shop is over its credit limit or more than 60 days late, so the assistant will only ask for payment.</div>
+      {% endif %}
+      <h3>Due for reorder</h3>
+      {% for s in recs.reorder %}<div style="margin-bottom:8px"><b>{{ s.name }}</b><div class="sub">{{ s.reason|capitalize }}</div></div>
+      {% else %}<div class="faint small" style="margin-bottom:8px">Nothing due.</div>{% endfor %}
+      <h3 style="margin-top:14px">Cross-sell</h3>
+      {% for s in recs.cross_sell %}<div style="margin-bottom:8px"><b>{{ s.name }}</b><div class="sub">{{ s.reason|capitalize }}</div></div>
+      {% else %}<div class="faint small">No suggestions.</div>{% endfor %}
+    </div>
+    <details class="more" style="margin-top:18px">
+      <summary>What the assistant knows before calling</summary>
+      <dl class="kv small">
+        {% for k, v in variables.items() %}<dt>{{ k|replace('_', ' ')|capitalize }}</dt><dd>{{ v }}</dd>{% endfor %}
+      </dl>
+    </details>
+    <div class="card">
+      <h2>Recent payments</h2>
+      {% for p in payments %}<div class="row" style="justify-content:space-between;margin-bottom:6px"><span>{{ p.date | date }} <span class="faint small">{{ p.mode }}</span></span><span class="num">{{ p.amount | inr }}</span></div>
+      {% else %}<div class="faint">None recorded.</div>{% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

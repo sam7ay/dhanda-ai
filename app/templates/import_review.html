@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Check your files{% endblock %}
+{% block content %}
+<div class="head">
+  <div><div class="crumb"><a href="/import">Connect your books</a> / Check</div><h1>Check before we import</h1>
+    <div class="muted" style="font-size:17px">Here's what we found in your {{ erp }} files.</div></div>
+</div>
+
+{% for e in report.errors %}<div class="alert">{{ e }}</div>{% endfor %}
+
+<form method="post" action="/import/commit">
+  <input type="hidden" name="token" value="{{ report.token }}">
+  <input type="hidden" name="erp" value="{{ erp }}">
+
+  {% if report.summary %}
+  <div class="grid g4">
+    <div class="card kpi hero"><div class="label">Retailers found</div><div class="value">{{ report.summary.retailers }}</div><div class="sub">{{ report.summary.with_mobile }} with a mobile number</div></div>
+    <div class="card kpi"><div class="label">Unpaid bills</div><div class="value">{{ report.summary.bills }}</div><div class="sub">{% if report.summary.date_range[0] %}{{ report.summary.date_range[0].strftime('%d %b %Y') }} to {{ report.summary.date_range[1].strftime('%d %b %Y') }}{% endif %}</div></div>
+    <div class="card kpi"><div class="label">Total pending</div><div class="value">{{ report.summary.pending | inr }}</div><div class="sub">should match your {{ erp }} report</div></div>
+    <div class="card kpi"><div class="label">Products</div><div class="value">{{ report.summary.items }}</div><div class="sub">{{ report.summary.sales_lines }} sales lines</div></div>
+  </div>
+  {% endif %}
+
+  {% for w in report.warnings %}<div class="alert warn mt" style="margin-bottom:0">{{ w }}</div>{% endfor %}
+
+  {% if not report.errors %}
+  <div class="card mt row" style="justify-content:space-between">
+    <div><b style="font-size:18px">Looks right?</b><div class="muted small">Your current retailers and call history in Dhanda AI will be replaced.</div></div>
+    <button class="btn primary big" onclick="return confirm('Import these retailers and bills now?')">Import {{ report.summary.retailers }} retailers</button>
+  </div>
+  {% endif %}
+
+  <details class="more" {{ 'open' if report.errors }}>
+    <summary>Check how columns were matched{{ ' (needs your help)' if report.errors }}</summary>
+    {% for kind, f in report.files.items() %}
+    <div class="card" style="margin-bottom:18px">
+      <h2>{{ f.name }} <span class="faint small">· {{ f.filename }} · headings on row {{ f.header_row }} · {{ f.rows }} rows</span></h2>
+      <div class="grid g3" style="gap:14px">
+        {% for field, (label, required, _) in f.fields.items() %}
+        <div>
+          <label class="small">{{ label }}{% if required %} *{% endif %}</label>
+          <select name="map:{{ kind }}.{{ field }}">
+            <option value="">— not in this file —</option>
+            {% for h in f.headers %}{% if h %}<option value="{{ loop.index0 }}" {{ 'selected' if f.mapping.get(field) == loop.index0 }}>{{ h }}</option>{% endif %}{% endfor %}
+          </select>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="table-wrap mt"><table>
+        <tr>{% for h in f.headers %}<th>{{ h }}</th>{% endfor %}</tr>
+        {% for r in f.sample %}<tr>{% for c in r %}<td class="small">{{ c if c is not none else '' }}</td>{% endfor %}</tr>{% endfor %}
+      </table></div>
+    </div>
+    {% endfor %}
+    <button class="btn" formaction="/import/review">Re-check with these columns</button>
+  </details>
+</form>
+{% endblock %}

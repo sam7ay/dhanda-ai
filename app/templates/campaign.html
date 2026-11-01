@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}{{ c.name }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <div class="crumb"><a href="/campaigns">Reminder calls</a> / #{{ c.id }}</div>
+    <h1>{{ c.name }}</h1>
+    <div class="muted">
+      {% if c.mode == "simulated" %}<span class="badge b-simulated">Practice run</span>{% endif %}
+      <span class="badge b-{{ c.status }}">{{ c.status|capitalize }}</span>
+      · calls between {{ c.window_start }} and {{ c.window_end }}
+    </div>
+  </div>
+  {% if c.mode == "live" and c.sarvam_campaign_id %}
+  <div class="row">
+    <form method="post" action="/sync"><input type="hidden" name="back" value="/campaigns/{{ c.id }}"><button class="btn">Refresh results</button></form>
+    {% if c.status in ("active", "scheduled") %}
+      <form method="post" action="/campaigns/{{ c.id }}/status"><input type="hidden" name="action" value="pause"><button class="btn">Pause</button></form>
+    {% elif c.status == "paused" %}
+      <form method="post" action="/campaigns/{{ c.id }}/status"><input type="hidden" name="action" value="resume"><button class="btn">Resume</button></form>
+    {% endif %}
+    {% if c.status not in ("cancelled", "ended") %}
+      <form method="post" action="/campaigns/{{ c.id }}/status" onsubmit="return confirm('Cancel this campaign? Calls not yet made will not be placed.')"><input type="hidden" name="action" value="cancel"><button class="btn danger">Cancel</button></form>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% if error %}<div class="alert">{{ error }}</div>{% endif %}
+{% if c.error %}<div class="alert">These calls couldn't start. Please check your calling line in Settings.<details class="small" style="margin-top:6px;font-weight:500"><summary>Details for your technical team</summary>{{ c.error }}</details></div>{% endif %}
+{% if synced %}<div class="alert ok">Updated {{ synced }} call{{ 's' if synced != '1' }}.</div>{% endif %}
+{% if c.mode == "live" and c.status in ("scheduled", "active") %}
+  <div class="alert info">Calls are going out between {{ c.window_start }} and {{ c.window_end }}. Press "Refresh results" to see the latest.</div>
+{% endif %}
+
+<div class="grid g4">
+  <div class="card kpi hero"><div class="label">Shops called</div><div class="value">{{ stats.total }}</div><div class="sub">{{ stats.contacted }} picked up</div></div>
+  <div class="card kpi"><div class="label">Promised</div><div class="value" style="color:var(--ok)">{{ stats.promised_value | inr }}</div><div class="sub">{{ stats.promised_count }} promises</div></div>
+  <div class="card kpi"><div class="label">Handed to owner</div><div class="value">{{ stats.transferred }}</div><div class="sub">asked for {{ business.owner_name.split()[0] }}</div></div>
+  <div class="card kpi"><div class="label">Reorder interest</div><div class="value">{{ stats.upsell_yes }}</div><div class="sub">{{ stats.upsell_maybe }} more said maybe</div></div>
+</div>
+
+{% if outcome_counts %}
+<div class="card" style="margin-top:16px">
+  <h2>What happened</h2>
+  <div class="chips">{% for k, n in outcome_counts.items() %}<a class="badge b-{{ k }}" href="#calls">{{ OUTCOMES.get(k, k) }} · {{ n }}</a>{% endfor %}</div>
+</div>
+{% endif %}
+
+<div class="card" style="margin-top:16px" id="calls">
+  <h2>Calls</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Retailer</th><th>What happened</th><th class="right">Promised</th><th>By</th><th>Reorder</th></tr>
+    {% for x in calls %}
+    <tr class="click" data-href="/calls/{{ x.id }}">
+      <td><b>{{ x.shop_name }}</b><div class="sub">{{ x.city }} · {{ x.pref_language }}</div></td>
+      <td>{% if x.outcome %}<span class="badge b-{{ x.outcome }}">{{ OUTCOMES.get(x.outcome, x.outcome) }}</span>{% else %}<span class="badge b-{{ x.status }}">{{ x.status|capitalize }}</span>{% endif %}</td>
+      <td class="right num">{{ x.promised_amount | inr if x.promised_amount else '—' }}</td>
+      <td>{{ x.promised_date | date("%d %b") if x.promised_date else '—' }}</td>
+      <td>{% if x.upsell_interest in ("yes", "maybe") %}<span class="badge {{ 'b-low' if x.upsell_interest == 'yes' else 'b-medium' }}">{{ x.upsell_interest|capitalize }}</span>{% else %}<span class="faint">—</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endblock %}

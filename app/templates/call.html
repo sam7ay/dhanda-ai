@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Call #{{ c.id }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <div class="crumb"><a href="/calls">Call history</a> / #{{ c.id }}</div>
+    <h1>{{ c.shop_name }}</h1>
+    <div class="muted" style="font-size:17px">{{ c.city }} · {{ c.created_at | date("%d %b %Y, %I:%M %p") }}</div>
+  </div>
+  <div class="row">
+    {% if c.mode == "live" and c.status not in ("completed", "failed") %}
+      <form method="post" action="/sync"><input type="hidden" name="back" value="/calls/{{ c.id }}"><button class="btn">Refresh</button></form>
+    {% endif %}
+    <a class="btn" href="/retailers/{{ c.rid }}">Open retailer</a>
+  </div>
+</div>
+
+{% if c.mode == "simulated" %}<div class="alert info">Practice call: no phone rang. This shows how the assistant would handle it (written in English).</div>{% endif %}
+{% if c.status == "failed" and c.summary %}<div class="alert">This call couldn't be placed. Please check your calling line in Settings.<details class="small" style="margin-top:6px;font-weight:500"><summary>Details for your technical team</summary>{{ c.summary }}</details></div>{% endif %}
+{% if c.mode == "live" and c.status in ("dialing", "scheduled", "queued") %}<div class="alert info">Calling your test phone {{ c.dialed_number | mask }} now. Press Refresh when the call ends.</div>{% endif %}
+
+<div class="grid g-wide">
+  <div class="card">
+    <h2>Conversation</h2>
+    {% if transcript %}
+    <div class="transcript">
+      {% for t in transcript %}
+      <div class="turn {{ 'agent' if t.role == 'agent' else 'user' }}"><div class="who">{{ 'Dhanda AI' if t.role == 'agent' else 'Retailer' }}</div>{{ t.text }}</div>
+      {% endfor %}
+    </div>
+    {% else %}<div class="empty">{{ 'No conversation: the call did not connect.' if c.outcome in ('no_answer', 'busy', 'failed') else 'Transcript appears here after the call.' }}</div>{% endif %}
+  </div>
+  <div class="stack">
+    <div class="card">
+      <h2>What happened</h2>
+      <dl class="kv">
+        <dt>Outcome</dt><dd>{% if c.outcome %}<span class="badge b-{{ c.outcome }}">{{ OUTCOMES.get(c.outcome) }}</span>{% else %}<span class="badge b-{{ c.status }}">{{ c.status|capitalize }}</span>{% endif %}</dd>
+        <dt>Promised</dt><dd class="num">{{ c.promised_amount | inr if c.promised_amount else '—' }}{% if c.promised_date %} by {{ c.promised_date | date("%a %d %b") }}{% endif %}</dd>
+        <dt>Reorder interest</dt><dd>{{ (c.upsell_interest or '—')|replace('_', ' ')|capitalize }}{% if c.products_interested %}<div class="small muted">{{ c.products_interested }}</div>{% endif %}</dd>
+        <dt>Asked for you</dt><dd>{{ 'Yes' if c.transferred else 'No' }}</dd>
+        <dt>Language</dt><dd>{{ c.language or c.pref_language }}</dd>
+        <dt>Length</dt><dd>{{ (c.duration|round|int ~ ' sec') if c.duration else '—' }}</dd>
+        {% if c.summary and c.status != "failed" %}<dt>Note</dt><dd>{{ c.summary }}</dd>{% endif %}
+      </dl>
+    </div>
+    <details class="more">
+      <summary>What the assistant knew before calling</summary>
+      <dl class="kv small">{% for k, v in variables.items() %}<dt>{{ k|replace('_', ' ')|capitalize }}</dt><dd>{{ v }}</dd>{% endfor %}</dl>
+    </details>
+  </div>
+</div>
+{% endblock %}

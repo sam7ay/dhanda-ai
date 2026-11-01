@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Retailers{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Retailers</h1><div class="muted" style="font-size:17px">{{ retailers|length }} shops from your {{ business.erp }} books</div></div>
+  <a class="btn primary big" href="/campaigns/new">📞 Call overdue shops</a>
+</div>
+<div class="card">
+  <form class="filters" method="get" style="margin-bottom:14px">
+    <input type="search" name="q" value="{{ q }}" placeholder="Search by shop or city">
+    <select name="risk" onchange="this.form.submit()">
+      <option value="">Any risk</option>
+      {% for x in ["High", "Medium", "Low"] %}<option {{ 'selected' if risk == x }}>{{ x }}</option>{% endfor %}
+    </select>
+    <select name="status" onchange="this.form.submit()">
+      <option value="">All balances</option><option value="overdue" {{ 'selected' if status == 'overdue' }}>Overdue only</option>
+    </select>
+    <select name="sort" onchange="this.form.submit()">
+      {% for k, label in [("overdue", "Sort: overdue"), ("outstanding", "Sort: outstanding"), ("days", "Sort: days overdue"), ("name", "Sort: name")] %}
+        <option value="{{ k }}" {{ 'selected' if sort == k }}>{{ label }}</option>{% endfor %}
+    </select>
+    <button class="btn">Apply</button>
+  </form>
+  <div class="table-wrap"><table>
+    <tr><th>Retailer</th><th class="right">Total due</th><th class="right">Overdue</th><th class="right">Days late</th><th>Risk</th><th>Last call</th></tr>
+    {% for r in retailers %}
+    <tr class="click" data-href="/retailers/{{ r.id }}">
+      <td><b>{{ r.shop_name }}</b><div class="sub">{{ r.city }} · {{ r.language }}</div></td>
+      <td class="right num">{{ r.outstanding | inr }}</td>
+      <td class="right num">{{ r.overdue | inr if r.overdue else '—' }}</td>
+      <td class="right num">{{ r.max_days_overdue or '—' }}</td>
+      <td><span class="badge b-{{ r.risk|lower }}">{{ r.risk }}</span></td>
+      <td>{% if r.last_call %}<span class="badge b-{{ r.last_call.outcome }}">{{ OUTCOMES.get(r.last_call.outcome, r.last_call.status) }}</span>{% else %}<span class="faint">—</span>{% endif %}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="empty">No retailers match.</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endblock %}

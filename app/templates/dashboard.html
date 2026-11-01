@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+{% if imported %}<div class="alert ok">Done! {{ imported }} retailers from your {{ business.erp }} books are now in Dhanda AI.</div>{% endif %}
+<div class="head">
+  <div>
+    <h1>Namaste, {{ business.owner_name.split()[0] }} ji</h1>
+    <div class="muted" style="font-size:17px">{{ overdue_count }} of your {{ retailer_count }} retailers have overdue bills.</div>
+  </div>
+  <a class="btn primary big" href="/campaigns/new">📞 Start reminder calls</a>
+</div>
+
+{% if not (checklist | selectattr(3) | list | length == checklist | length) %}
+<div class="card" style="margin-bottom:18px">
+  <h2>Getting started</h2>
+  <div class="steps">
+    {% for title, text, href, done in checklist %}
+    <div class="step {{ 'done' if done }}">
+      <span class="n">{{ '✓' if done else loop.index }}</span>
+      <div class="t"><b>{{ title }}</b><span>{{ text }}</span></div>
+      {% if not done %}<a class="btn" href="{{ href }}">Start</a>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="grid g4">
+  <div class="card kpi hero"><div class="label">Money in the market</div><div class="value">{{ outstanding | inr }}</div><div class="sub">all unpaid bills</div></div>
+  <div class="card kpi"><div class="label">Overdue</div><div class="value" style="color:var(--danger)">{{ overdue | inr }}</div><div class="sub">{{ (overdue / outstanding * 100) | round | int if outstanding else 0 }}% is past its due date</div></div>
+  <div class="card kpi"><div class="label">Promised on calls</div><div class="value" style="color:var(--ok)">{{ stats.promised_value | inr }}</div><div class="sub">{{ stats.promised_count }} shops gave a date</div></div>
+  <div class="card kpi"><div class="label">Ready to reorder</div><div class="value">{{ stats.upsell_yes }}</div><div class="sub">{{ stats.upsell_maybe }} more said maybe</div></div>
+</div>
+
+<div class="grid g-wide mt">
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><h2>Who owes you the most</h2><a href="/retailers">See all retailers →</a></div>
+    <div class="table-wrap"><table>
+      <tr><th>Retailer</th><th class="right">Overdue</th><th class="right">Days late</th><th>Last call</th></tr>
+      {% for r in top %}
+      <tr class="click" data-href="/retailers/{{ r.id }}">
+        <td><b>{{ r.shop_name }}</b><div class="sub">{{ r.city }}</div></td>
+        <td class="right num"><b>{{ r.overdue | inr }}</b></td>
+        <td class="right num"><span class="badge b-{{ r.risk|lower }}">{{ r.max_days_overdue }} days</span></td>
+        <td>{% if r.last_call %}<span class="badge b-{{ r.last_call.outcome }}">{{ OUTCOMES.get(r.last_call.outcome, r.last_call.status) }}</span>{% else %}<span class="faint">Not called yet</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table></div>
+  </div>
+  <div class="stack">
+    <div class="card">
+      <h2>How late is the money?</h2>
+      <div class="bars">
+        {% for label, value in ageing.items() %}
+        <div class="bar-row">
+          <span class="muted">{{ label }}</span>
+          <div class="bar-track"><div class="bar-fill a{{ loop.index0 }}" style="width: {{ (value / ageing_max * 100) | round(1) }}%"></div></div>
+          <span class="right num">{{ value | inr }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="card">
+      <h2>Calls so far</h2>
+      <dl class="kv">
+        <dt>Shops called</dt><dd class="num">{{ stats.total }}</dd>
+        <dt>Picked up</dt><dd class="num">{{ stats.contacted }} ({{ (stats.connect_rate * 100) | round | int }}%)</dd>
+        <dt>Asked for you</dt><dd class="num">{{ stats.transferred }}</dd>
+        <dt>Collected this month</dt><dd class="num">{{ collected | inr }}</dd>
+      </dl>
+    </div>
+  </div>
+</div>
+
+<div class="grid g2 mt">
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><h2>Payments coming in</h2><a href="/calls?outcome=promised">All promises →</a></div>
+    {% if upcoming %}
+    <div class="table-wrap"><table>
+      <tr><th>Retailer</th><th class="right">Amount</th><th>Promised by</th></tr>
+      {% for c in upcoming %}
+      <tr class="click" data-href="/calls/{{ c.id }}"><td><b>{{ c.shop_name }}</b><div class="sub">{{ c.city }}</div></td><td class="right num"><b>{{ (c.promised_amount or 0) | inr }}</b></td><td>{{ c.promised_date | date("%a, %d %b") }}</td></tr>
+      {% endfor %}
+    </table></div>
+    {% else %}<div class="empty">No promises yet. Start reminder calls and they'll show up here.</div>{% endif %}
+  </div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><h2>Latest calls</h2><a href="/calls">Call history →</a></div>
+    {% if recent %}
+    <div class="table-wrap"><table>
+      <tr><th>Retailer</th><th>What happened</th></tr>
+      {% for c in recent %}
+      <tr class="click" data-href="/calls/{{ c.id }}"><td><b>{{ c.shop_name }}</b><div class="sub">{{ c.city }}</div></td>
+        <td><span class="badge b-{{ c.outcome or c.status }}">{{ OUTCOMES.get(c.outcome, c.status|capitalize) }}</span></td></tr>
+      {% endfor %}
+    </table></div>
+    {% else %}<div class="empty">No calls yet.</div>{% endif %}
+  </div>
+</div>
+{% endblock %}

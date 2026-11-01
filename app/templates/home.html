@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+  {% include "_head.html" %}
+  <title>Dhanda AI · Get your udhaar back, without the phone calls</title>
+  <meta name="description" content="Dhanda AI calls your retailers in Hindi or Punjabi, gets a payment date for overdue bills, and tells you who is ready to reorder. Works with Busy and Marg.">
+</head>
+<body class="site">
+{% set primary_href = "/dashboard" if logged_in else ("/demo" if demo else "/setup") %}
+<header class="topbar">
+  <div class="wrap">
+    <a class="logo" href="/"><span class="logo-mark">₹</span><span>Dhanda <span class="ai">AI</span></span></a>
+    <nav>
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#books">Busy &amp; Marg</a>
+      <a href="#faq">Questions</a>
+    </nav>
+    {% if logged_in %}
+      <a class="btn primary" href="/dashboard">Open my dashboard</a>
+    {% else %}
+      {% if has_business %}<a class="btn" href="/login">Log in</a>{% endif %}
+      <a class="btn primary" href="{{ primary_href }}">{{ 'Try it free' if demo else 'Get started' }}</a>
+    {% endif %}
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <span class="pill">📞 Calls your retailers in Hindi &amp; Punjabi</span>
+      <h1>Get your <em>udhaar</em> back. Without making a single call.</h1>
+      <p class="lead">Dhanda AI phones every shop that owes you money, politely asks when they'll pay, and writes down the date. It even tells you who's ready to reorder.</p>
+      <p class="hindi">उधार की वसूली अब आसान — आपकी तरफ़ से, आपकी भाषा में।</p>
+      <div class="ctas">
+        {% if demo %}<a class="btn big light" href="/demo">See it working →</a>{% endif %}
+        <a class="btn big {{ 'ghost' if demo else 'light' }}" href="{{ '/dashboard' if logged_in else '/setup' }}">Set up my business</a>
+      </div>
+      <p class="note">Try free with a sample business ·Works with your Busy or Marg books · Nothing to install</p>
+    </div>
+    <div class="mock" aria-hidden="true">
+      <div class="mock-dash">
+        <div class="top"><b>This week</b><span class="badge b-low">32 shops called</span></div>
+        <div class="kpis">
+          <div><small>Promised to pay</small><b>₹8,40,500</b></div>
+          <div><small>Shops reached</small><b>28</b></div>
+          <div><small>Want to reorder</small><b>9</b></div>
+        </div>
+        <div class="line"><span><b>Waheguru Kiryana Store</b> · Moga</span><span class="badge b-promised">Pays Friday</span></div>
+        <div class="line"><span><b>Balaji Super Mart</b> · Ludhiana</span><span class="badge b-partial">₹40,000 by Monday</span></div>
+        <div class="line"><span><b>Shiv General Store</b> · Khanna</span><span class="badge b-transferred">Wants to talk to you</span></div>
+        <div class="line"><span><b>Royal Traders</b> · Jalandhar</span><span class="badge b-promised">Pays tomorrow</span></div>
+      </div>
+      <div class="mock-call">
+        <div class="who"><span class="dot"></span><b>On call · Gurpreet ji</b><span class="faint" style="margin-left:auto">1:42</span></div>
+        <div class="bubble">Sat Sri Akal ji! ₹62,400 ka bill 12 October se baaki hai. Kab tak ho jayega?</div>
+        <div class="bubble me">Shukarvaar tak bhej dunga.</div>
+        <div class="bubble">Theek hai ji, Friday likh liya. Dhanyavaad!</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="strip">
+  <div class="wrap">
+    <span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zm0 0a2 2 0 0 0 2 2h13"/></svg>Works with Busy &amp; Marg</span>
+    <span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>Speaks Hindi &amp; Punjabi</span>
+    <span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>Passes the call to you when needed</span>
+    <span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Always polite, never threatens</span>
+  </div>
+</div>
+
+<section class="section">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Sound familiar?</span>
+      <h2>Your money is stuck in the market. Chasing it takes all your time.</h2>
+    </div>
+    <div class="pain">
+      <div class="card"><div class="q">"Seth ji, next week pakka."</div><p>You call the same 80 shops every month and still don't know who will pay when.</p></div>
+      <div class="card"><div class="q">Asking feels awkward.</div><p>These are old relationships. Nobody likes being the one who keeps asking for money.</p></div>
+      <div class="card"><div class="q">No time to sell more.</div><p>Every hour spent chasing payments is an hour you're not taking new orders.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section alt" id="how">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">How it works</span>
+      <h2>Up and running in three simple steps</h2>
+      <p>No software to install and no training needed. If you can send a WhatsApp, you can use Dhanda AI.</p>
+    </div>
+    <div class="how">
+      <div class="card"><div class="big">1</div><h3>Connect your books</h3><p>Export your outstanding report from Busy or Marg and upload it. Dhanda AI reads who owes what.</p></div>
+      <div class="card"><div class="big">2</div><h3>Choose who to call</h3><p>Pick the overdue shops, or simply call everyone 30+ days late. Press one button to start.</p></div>
+      <div class="card"><div class="big">3</div><h3>See who will pay, and when</h3><p>Every promise, date and reorder lands on your dashboard. You only call the few who ask for you.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">What it does</span>
+      <h2>A collections assistant that sounds like your own staff</h2>
+    </div>
+    <div class="features">
+      {% for title, text, path in [
+        ("Speaks your retailer's language", "Starts in Hindi or Punjabi and switches the moment the shopkeeper does. Says amounts the way people say them.", "M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"),
+        ("Gets a date, not just a 'haan ji'", "Asks for a specific amount and day, repeats it back, and notes part-payments too.", "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"),
+        ("Suggests the next order", "For shops in good standing, it reminds them about items they usually restock. Never for shops that are badly overdue.", "M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0"),
+        ("Hands the call to you", "If a retailer wants to talk to the owner or argue the bill, the call comes straight to your mobile.", "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"),
+        ("Respectful, always", "Uses 'ji', never threatens, never mentions legal action, and calls only in business hours.", "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"),
+        ("Every call written down", "Read what was said on each call, and see a clear list of who promised what.", "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h8")
+      ] %}
+      <div class="feature">
+        <div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ path }}"/></svg></div>
+        <h4>{{ title }}</h4><p>{{ text }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="section alt">
+  <div class="wrap split">
+    <div>
+      <span class="section-head" style="margin:0;text-align:left"><span class="eyebrow">Listen in</span></span>
+      <h2>Sounds like a polite munim, not a robot</h2>
+      <p class="lead">Every call starts with a greeting, gets to the point in a few seconds, and ends with a clear promise. If the shopkeeper is busy, it calls back later.</p>
+      <ul class="ticks">
+        <li>Introduces itself on your behalf</li>
+        <li>Knows the exact bills and due dates</li>
+        <li>Notes damaged goods or wrong bills for you to check</li>
+      </ul>
+    </div>
+    <div class="convo transcript">
+      <div class="turn agent"><div class="who">Dhanda AI</div>Namaste Rakesh ji, main Sandhu Traders ki taraf se Harpreet ji ke liye bol rahi hoon. Do minute baat ho sakti hai?</div>
+      <div class="turn user"><div class="who">Rakesh ji</div>Haan ji, boliye.</div>
+      <div class="turn agent"><div class="who">Dhanda AI</div>Aapka ₹1,24,000 baaki hai, jismein ₹58,000 ka bill 8 October se due hai. Yeh kab tak clear ho payega?</div>
+      <div class="turn user"><div class="who">Rakesh ji</div>Abhi ₹30,000 Monday ko bhej deta hoon, baaki agle hafte.</div>
+      <div class="turn agent"><div class="who">Dhanda AI</div>Theek hai ji, ₹30,000 Monday tak likh liya. Aur aapka sarson ka tel bhi khatam hone wala hoga, agle order mein bhej dein?</div>
+      <div class="turn user"><div class="who">Rakesh ji</div>Haan, do tin bhej dena.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="books">
+  <div class="wrap split">
+    <div class="mock-dash" style="box-shadow: var(--shadow)">
+      <div class="top"><b>Connect your books</b><span class="badge b-low">2 minutes</span></div>
+      <div class="erp-pick" style="margin-bottom:14px">
+        <div class="card" style="text-align:center;padding:18px;border-color:var(--brand);background:var(--brand-soft)"><b style="font-size:20px">Busy</b></div>
+        <div class="card" style="text-align:center;padding:18px"><b style="font-size:20px">Marg</b></div>
+      </div>
+      <div class="line"><span>✅ Outstanding bills</span><span class="faint">165 bills</span></div>
+      <div class="line"><span>✅ Sales by item</span><span class="faint">24 products</span></div>
+      <div class="line"><span>✅ Party list with mobiles</span><span class="faint">60 shops</span></div>
+    </div>
+    <div>
+      <span class="section-head" style="margin:0;text-align:left"><span class="eyebrow">Works with your books</span></span>
+      <h2>Keep using Busy or Marg. Nothing changes.</h2>
+      <p class="lead">Export the reports you already know, like Bills Receivable and Item-wise Sales, and upload them. Dhanda AI matches the columns for you.</p>
+      <ul class="ticks">
+        <li>Excel or CSV, straight from Busy or Marg</li>
+        <li>Your books stay in your software</li>
+        <li>Upload again anytime to refresh</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="section alt">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Made for</span>
+      <h2>Distributors and wholesalers who sell on credit</h2>
+    </div>
+    <div class="who-for">
+      {% for x in ["FMCG & groceries", "Pharma", "Hardware & sanitary", "Building material", "Auto parts", "Electricals", "Agri inputs", "Textiles"] %}<span>{{ x }}</span>{% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="section" id="faq">
+  <div class="wrap">
+    <div class="section-head"><span class="eyebrow">Questions</span><h2>Good questions, simple answers</h2></div>
+    <div class="faq">
+      <details open><summary>Do I need any technical knowledge?</summary><p>No. You upload one report from Busy or Marg, pick who to call, and press start. That's it.</p></details>
+      <details><summary>Will my retailers know it's an AI?</summary><p>Yes, if they ask, it says it's an assistant calling on your behalf. It's always polite and uses your business name.</p></details>
+      <details><summary>Which languages does it speak?</summary><p>Hindi and Punjabi. It starts in the language you set for each shop and switches if the shopkeeper does.</p></details>
+      <details><summary>What if a retailer wants to talk to me?</summary><p>The call is passed straight to your mobile. If you can't pick up, the assistant tells them you'll call back.</p></details>
+      <details><summary>Can I try it before using my real data?</summary><p>Yes. Try it with a sample business first, and make practice calls to your own phone.</p></details>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="padding-top:0">
+  <div class="wrap">
+    <div class="cta-band">
+      <h2>Stop chasing. Start collecting.</h2>
+      <p>See Dhanda AI working on a sample business in under a minute.</p>
+      <a class="btn big light" href="{{ primary_href }}">{{ 'See it working →' if demo else 'Get started →' }}</a>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <a class="logo" href="/"><span class="logo-mark">₹</span><span>Dhanda <span class="ai">AI</span></span></a>
+    <span>Voice calls powered by Sarvam AI · Made for Indian distributors</span>
+  </div>
+</footer>
+</body>
+</html>

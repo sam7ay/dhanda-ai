@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  {% include "_head.html" %}
+  <title>Log in · Dhanda AI</title>
+</head>
+<body>
+<div class="auth">
+  {% include "_auth_side.html" %}
+  <div class="auth-main">
+    <div class="box">
+      <h1>Welcome back</h1>
+      <p class="muted">Log in to {{ business.name }}.</p>
+      {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+      {% if stage == "mobile" %}
+        <form method="post" action="/login/send-otp">
+          <div class="field"><label>Your mobile number</label><input type="tel" name="mobile" required autofocus placeholder="98xxxxxxxx" value="{{ mobile or '' }}"></div>
+          <div class="field"><button class="btn primary big block">Send me a code</button></div>
+        </form>
+      {% else %}
+        <form method="post" action="/login/verify">
+          <input type="hidden" name="mobile" value="{{ mobile }}">
+          <div class="field"><label>Enter the 6-digit code sent to {{ mobile | mask }}</label><input type="text" name="code" inputmode="numeric" maxlength="6" required autofocus style="font-size:24px;letter-spacing:.3em"></div>
+          <div class="field"><button class="btn primary big block">Log in</button></div>
+        </form>
+        {% if demo_code %}
+          <div class="otp-demo">SMS isn't switched on yet, so here's your code:<b>{{ demo_code }}</b></div>
+        {% endif %}
+        <p class="small" style="margin-top:14px"><a href="/login">Use a different number</a></p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+</body>
+</html>

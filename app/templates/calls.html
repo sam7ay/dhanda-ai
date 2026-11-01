@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Calls{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Call history</h1><div class="muted" style="font-size:17px">Every call, newest first. Click one to read the conversation.</div></div>
+  {% if sarvam_ready %}<form method="post" action="/sync"><input type="hidden" name="back" value="/calls"><button class="btn">Refresh results</button></form>{% endif %}
+</div>
+<div class="card">
+  <form class="filters" method="get" style="margin-bottom:14px">
+    <select name="outcome" onchange="this.form.submit()">
+      <option value="">Everything</option>
+      {% for k, label in OUTCOMES.items() %}<option value="{{ k }}" {{ 'selected' if outcome == k }}>{{ label }}</option>{% endfor %}
+    </select>
+  </form>
+  <div class="table-wrap"><table>
+    <tr><th>When</th><th>Retailer</th><th>What happened</th><th class="right">Promised</th><th>By</th><th>Reorder</th></tr>
+    {% for c in calls %}
+    <tr class="click" data-href="/calls/{{ c.id }}">
+      <td class="nowrap">{{ c.created_at | date("%d %b, %I:%M %p") }}</td>
+      <td><b>{{ c.shop_name }}</b><div class="sub">{{ c.city }}</div></td>
+            <td><span class="badge b-{{ c.outcome or c.status }}">{{ OUTCOMES.get(c.outcome, c.status|capitalize) }}</span>{% if c.mode == "simulated" %} <span class="badge b-simulated">Practice</span>{% endif %}</td>
+      <td class="right num">{{ c.promised_amount | inr if c.promised_amount else '—' }}</td>
+      <td>{{ c.promised_date | date("%d %b") if c.promised_date else '—' }}</td>
+      <td>{{ (c.upsell_interest or '—')|replace('_', ' ')|capitalize }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="empty">No calls yet.</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endblock %}

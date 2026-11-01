@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Settings</h1><div class="muted" style="font-size:17px">Your business details and the phones Dhanda AI uses.</div></div></div>
+{% if error %}<div class="alert">{{ error }}</div>{% endif %}
+{% if saved %}<div class="alert ok">Saved.</div>{% endif %}
+
+<div class="grid g2">
+  <form class="card" method="post" action="/settings">
+    <h2>Your business</h2>
+    <div class="field"><label>Business name</label><input type="text" name="business_name" value="{{ business.name }}" required></div>
+    <div class="field"><label>Your name</label><input type="text" name="owner_name" value="{{ business.owner_name }}" required></div>
+    <div class="field"><label>Your mobile</label><input type="tel" name="owner_mobile" value="{{ business.owner_mobile }}" required>
+      <div class="hint">You log in with this. When a retailer asks for the owner, the call comes to this number.</div></div>
+    <div class="field"><label>Accounts software</label>
+      <div class="erp-pick choice">{% for e in ["Busy", "Marg"] %}<label><input type="radio" name="erp" value="{{ e }}" {{ 'checked' if business.erp == e }}> {{ e }}</label>{% endfor %}</div></div>
+    <div class="field"><label>Phones for test calls</label>
+      <textarea name="test_numbers" placeholder="One number per line">{{ business.test_numbers | join('\n') }}</textarea>
+      <div class="hint">Real calls ring these phones instead of your retailers, so you can hear the assistant yourself first.</div></div>
+    <div class="field"><button class="btn primary big">Save</button></div>
+  </form>
+
+  <div class="stack">
+    <div class="card">
+      <h2>Calling line</h2>
+      {% if not missing %}
+        <div class="alert ok" style="margin-bottom:0">✓ Switched on. Calls go out from {{ agent_number }}.</div>
+      {% else %}
+        <p class="muted">Not switched on yet. Until then, every call is a practice run that shows what would happen. Our team switches this on for you.</p>
+      {% endif %}
+    </div>
+    <div class="card">
+      <h2>Your books</h2>
+      {% if business.data_source == "imported" %}
+        <p class="muted">Uploaded from {{ business.erp }} on {{ business.imported_at | date("%d %b %Y") }}.</p>
+        <a class="btn primary" href="/import">Upload again</a>
+      {% else %}
+        <p class="muted">You're using a sample business. Upload your {{ business.erp }} reports to use your own retailers.</p>
+        <div class="row">
+          <a class="btn primary" href="/import">Connect my books</a>
+          <form method="post" action="/settings/regenerate" onsubmit="return confirm('Start over with a fresh sample business? Calls made so far will be cleared.')">
+            <button class="btn">Fresh sample data</button>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+    <details class="more">
+      <summary>For your technical team</summary>
+      <p class="small muted">Calls run on Sarvam Voice Agents. Set these in the server's environment and restart.</p>
+      <dl class="kv small">
+        {% for k, v in missing.items() %}<dt><code>{{ k }}</code></dt><dd>{{ v }}</dd>{% else %}<dt>Sarvam</dt><dd>All set</dd>{% endfor %}
+      </dl>
+      <p class="small" style="margin-top:12px">{% if public_url %}Results webhook: <code>{{ public_url }}/webhooks/sarvam</code>{% else %}No <code>PUBLIC_BASE_URL</code> set, so results are fetched when someone presses Refresh.{% endif %}</p>
+      <p class="small"><a href="/agent#setup">Assistant setup for Sarvam</a></p>
+    </details>
+  </div>
+</div>
+{% endblock %}

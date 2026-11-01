@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Campaigns{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Reminder calls</h1><div class="muted" style="font-size:17px">Each round calls a set of overdue shops.</div></div>
+  <a class="btn primary big" href="/campaigns/new">📞 New round of calls</a>
+</div>
+<div class="card">
+  {% if campaigns %}
+  <div class="table-wrap"><table>
+    <tr><th>Round</th><th>Status</th><th>Progress</th><th class="right">Picked up</th><th class="right">Promised</th><th class="right">Want to reorder</th></tr>
+    {% for c in campaigns %}
+    <tr class="click" data-href="/campaigns/{{ c.id }}">
+      <td><b>{{ c.name }}</b><div class="sub">{{ c.created_at | date("%d %b, %I:%M %p") }}</div></td>
+            <td><span class="badge b-{{ c.status }}">{{ c.status|capitalize }}</span>{% if c.mode == "simulated" %} <span class="badge b-simulated">Practice</span>{% endif %}</td>
+      <td><div class="progress"><span style="width: {{ (c.done / c.stats.total * 100) if c.stats.total else 0 }}%"></span></div><div class="small muted">{{ c.done }} / {{ c.stats.total }}</div></td>
+      <td class="right num">{{ c.stats.contacted }}</td>
+      <td class="right num">{{ c.stats.promised_value | inr }}</td>
+      <td class="right num">{{ c.stats.upsell_yes }}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}
+  <div class="empty">No calls yet. <a href="/campaigns/new">Start your first round of reminder calls.</a></div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Connect your books{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Connect your books</h1>
+    <div class="muted" style="font-size:17px">Upload the reports you already use in Busy or Marg. We'll match everything up for you.</div></div>
+</div>
+{% if error %}<div class="alert">{{ error }}</div>{% endif %}
+{% if business.data_source == "imported" %}<div class="alert ok">Your {{ business.erp }} books were last uploaded on {{ business.imported_at | date("%d %b %Y, %I:%M %p") }}. Upload again anytime to refresh.</div>{% endif %}
+
+<form method="post" action="/import/upload" enctype="multipart/form-data" class="grid g-wide">
+  <div class="card">
+    <h2>1. Which software do you use?</h2>
+    <div class="erp-pick choice" style="margin-bottom:26px">
+      {% for e in ["Busy", "Marg"] %}<label><input type="radio" name="erp" value="{{ e }}" {{ 'checked' if business.erp == e }}> {{ e }}</label>{% endfor %}
+    </div>
+    <h2>2. Upload your reports</h2>
+    <div class="stack">
+      <div class="drop req">
+        <b>Outstanding bills <span class="badge b-transferred">Needed</span></b>
+        <span class="muted small">The bill-wise outstanding (bills receivable) report, exported to Excel.</span>
+        <input type="file" name="bills" accept=".xlsx,.csv" required>
+      </div>
+      <div class="drop">
+        <b>Item-wise sales <span class="badge">Recommended</span></b>
+        <span class="muted small">Lets the assistant suggest the right products. Use the item-wise sales register for the last 6 months.</span>
+        <input type="file" name="sales" accept=".xlsx,.csv">
+      </div>
+      <div class="drop">
+        <b>Party list with mobile numbers <span class="badge">Recommended</span></b>
+        <span class="muted small">So the assistant knows whom to call. The account or party master list with mobile, city and credit limit.</span>
+        <input type="file" name="parties" accept=".xlsx,.csv">
+      </div>
+    </div>
+    <div class="field mt"><button class="btn primary big">Check my files →</button>
+      <div class="hint">Nothing is changed yet. You'll see a preview first.</div></div>
+  </div>
+  <div class="stack">
+    <div class="card">
+      <h2>Don't have the files handy?</h2>
+      <p class="muted">Download example exports to see what they look like, or to try the upload yourself.</p>
+      {% for e in ["Busy", "Marg"] %}
+      <h3 style="margin-top:14px">{{ e }} examples</h3>
+      <div class="row small">{% for k, label in kinds.items() %}<a class="btn" style="padding:8px 12px;font-size:14px" href="/import/sample/{{ e }}/{{ k }}">{{ label }}</a>{% endfor %}</div>
+      {% endfor %}
+    </div>
+    <div class="card">
+      <h2>Good to know</h2>
+      <ul class="small" style="padding-left:20px;margin:0;display:grid;gap:8px">
+        <li>Excel (.xlsx) or CSV files both work. If you have an old .xls file, open it in Excel and save it as .xlsx.</li>
+        <li>Report titles and total rows are fine. We skip them.</li>
+        <li>Uploading replaces the retailers and call history shown here. Your Busy or Marg data isn't touched.</li>
+      </ul>
+    </div>
+  </div>
+</form>
+{% endblock %}

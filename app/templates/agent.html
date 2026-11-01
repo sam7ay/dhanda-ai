@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Your assistant{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Your calling assistant</h1><div class="muted" style="font-size:17px">How Dhanda AI talks to your retailers on your behalf.</div></div>
+</div>
+<div class="grid g3">
+  <div class="card"><h2>🗣️ Speaks their language</h2><p class="muted">Hindi or Punjabi. It starts in the shop's language and switches if the shopkeeper does.</p></div>
+  <div class="card"><h2>🙏 Always respectful</h2><p class="muted">Says "ji", never threatens, never talks about legal action, and only calls in business hours.</p></div>
+  <div class="card"><h2>📲 Passes calls to you</h2><p class="muted">If a retailer wants to talk to the owner, the call comes to {{ business.owner_mobile | mask }}.</p></div>
+</div>
+
+<div class="grid g-wide mt">
+  <div class="card">
+    <h2>What a call sounds like</h2>
+    <div class="transcript">
+      <div class="turn agent"><div class="who">Dhanda AI</div>Namaste {{ variables.retailer_name or 'Rakesh' }} ji, main {{ business.name }} ki taraf se {{ business.owner_name.split()[0] }} ji ke liye bol rahi hoon. Do minute baat ho sakti hai?</div>
+      <div class="turn user"><div class="who">Retailer</div>Haan ji, boliye.</div>
+      <div class="turn agent"><div class="who">Dhanda AI</div>Aapka {{ variables.outstanding_amount or '₹1,24,000' }} baaki hai, jismein {{ variables.overdue_amount or '₹58,000' }} {{ variables.oldest_due_date or '8 October' }} se due hai. Yeh kab tak clear ho payega?</div>
+      <div class="turn user"><div class="who">Retailer</div>Agle Monday tak bhej deta hoon.</div>
+      <div class="turn agent"><div class="who">Dhanda AI</div>Theek hai ji, Monday likh liya. Dhanyavaad!</div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Every call, step by step</h2>
+    <ol style="padding-left:20px;margin:0;display:grid;gap:10px">
+      <li>Checks the shop's unpaid bills from your books.</li>
+      <li>Calls in the shop's language and introduces itself for you.</li>
+      <li>Asks for a payment date and amount, and repeats it back.</li>
+      <li>If the shop is in good standing, suggests items they usually reorder.</li>
+      <li>Hands the call to you if they ask.</li>
+      <li>Writes down the promise so you can see it on your dashboard.</li>
+    </ol>
+  </div>
+</div>
+
+<details class="more" id="setup">
+  <summary>For your technical team: assistant setup in Sarvam</summary>
+  <pre class="prompt">{{ prompt }}</pre>
+</details>
+{% endblock %}

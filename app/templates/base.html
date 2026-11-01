@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  {% include "_head.html" %}
+  <title>{% block title %}Home{% endblock %} · Dhanda AI</title>
+</head>
+<body>
+{% set icons = {
+  "home": '<path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
+  "shops": '<path d="M3 9l1.5-5h15L21 9M3 9h18M3 9v11h18V9M9 20v-6h6v6"/>',
+  "calls": '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+  "history": '<path d="M12 8v4l3 2M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/>',
+  "books": '<path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zm0 0a2 2 0 0 0 2 2h13M8 7h7M8 11h7"/>',
+  "assistant": '<path d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  "settings": '<path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'
+} %}
+<div class="shell">
+  <nav class="side">
+    <a class="logo" href="/dashboard"><span class="logo-mark">₹</span><span>Dhanda <span class="ai">AI</span></span></a>
+    {% set nav = [("/dashboard", "Home", "home"), ("/retailers", "Retailers", "shops"), ("/campaigns", "Reminder calls", "calls"),
+                  ("/calls", "Call history", "history"), ("/import", "Connect your books", "books"),
+                  ("/agent", "Your assistant", "assistant"), ("/settings", "Settings", "settings")] %}
+    {% for href, label, icon in nav %}
+      <a href="{{ href }}" class="nav {{ 'on' if path.startswith(href) }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{{ icons[icon] | safe }}</svg>{{ label }}</a>
+    {% endfor %}
+    <div class="spacer"></div>
+    <div class="biz"><b>{{ business.name }}</b>{{ business.owner_name }}<br><a href="/logout">Log out</a></div>
+  </nav>
+  <main class="main">
+    {% if business.data_source == "sample" %}
+      <div class="banner">
+        <span class="badge b-simulated">Sample data</span>
+        <span>You're looking at a sample business. Connect your Busy or Marg books to see your own retailers.</span>
+        <a class="btn primary" href="/import">Connect my books</a>
+      </div>
+    {% elif not live_ready %}
+      <div class="banner">
+        <span class="badge b-simulated">Practice mode</span>
+        <span>Your books are connected. Calls are practice runs until your calling line is switched on.</span>
+      </div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<script>
+  document.querySelectorAll("tr[data-href]").forEach(tr => tr.addEventListener("click", e => {
+    if (e.target.closest("a, button, input, label")) return;
+    location.href = tr.dataset.href;
+  }));
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
