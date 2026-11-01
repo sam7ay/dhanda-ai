@@ -61,7 +61,7 @@ PUNJAB_CITIES = {
     "mansa", "zirakpur", "kharar", "tarn taran", "abohar", "jagraon", "samrala", "nabha", "sunam",
 }
 DEFAULT_CREDIT_DAYS = 30
-UPLOAD_DIR = db.DB_PATH.parent / "uploads"
+UPLOAD_DIR = db.BASE_DIR / "uploads"
 
 
 class ImportError_(Exception):

@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import hmac
 import json
@@ -26,7 +27,6 @@ if env_file.exists():
 
 from . import calling, db, erp_import, ledger, sample_data, sample_exports, sarvam_va  # noqa: E402
 
-db.init()
 app = FastAPI(title="Dhanda AI")
 app.mount("/static", StaticFiles(directory=ROOT / "app" / "static"), name="static")
 templates = Jinja2Templates(directory=ROOT / "app" / "templates")
@@ -34,7 +34,6 @@ templates.env.filters["inr"] = ledger.inr
 templates.env.globals["OUTCOMES"] = calling.OUTCOMES
 
 SESSION_COOKIE = "dhanda_session"
-PUBLIC_PATHS = ("/static", "/setup", "/login", "/webhooks", "/demo")
 DEMO_MOBILE = calling.DEMO_MOBILE
 
 
@@ -68,127 +67,190 @@ def go(path, **params):
 normalise_mobile = ledger.normalise_mobile
 
 
+PROTECTED_PREFIXES = ("/dashboard", "/retailers", "/campaigns", "/live", "/api/live", "/calls", "/import",
+                      "/agent", "/settings", "/sync")
+
+
 @app.middleware("http")
 async def auth(request: Request, call_next):
     path = request.url.path
-    if path == "/" or path.startswith(PUBLIC_PATHS):
+    if not path.startswith(PROTECTED_PREFIXES):
         return await call_next(request)
-    if not db.business():
-        if not demo_enabled():
-            return RedirectResponse("/setup", status_code=303)
-        _ensure_demo()  # a fresh Vercel instance: rebuild the same demo book before serving
-    mobile = _session_mobile(request)
-    if not mobile or mobile != db.business()["owner_mobile"]:
+    profile = read_profile(request)
+    if not profile:
         return RedirectResponse("/login", status_code=303)
+    if not profile.get("b"):
+        return RedirectResponse("/setup", status_code=303)
+    open_workspace(profile)
     return await call_next(request)
 
 
-# Sessions are signed cookies rather than database rows, so they keep working across
-# Vercel instances that each have their own temporary database.
+# ---------- Sessions ----------
+# Each business logs in with its own mobile and gets its own database. The session is a signed
+# cookie that also carries the business profile, so any Vercel instance (each with its own empty
+# /tmp) can rebuild the same workspace on demand.
 
 def _session_secret():
     secret = os.environ.get("DHANDA_SESSION_SECRET") or os.environ.get("DHANDA_WEBHOOK_SECRET")
-    return (secret or "dhanda-" + os.environ.get("VERCEL_PROJECT_ID", str(db.DB_PATH))).encode()
+    return (secret or "dhanda-" + os.environ.get("VERCEL_PROJECT_ID", str(db.BASE_DIR))).encode()
 
 
 def _sign(payload):
     return hmac.new(_session_secret(), payload.encode(), hashlib.sha256).hexdigest()[:32]
 
 
-def _session_mobile(request):
-    token = request.cookies.get(SESSION_COOKIE, "")
+def _pack(data):
+    body = base64.urlsafe_b64encode(json.dumps(data, separators=(",", ":")).encode()).decode()
+    return f"{body}.{_sign(body)}"
+
+
+def _unpack(token):
     try:
-        mobile, expires, sig = token.split(".")
-    except ValueError:
+        body, sig = token.rsplit(".", 1)
+        if not hmac.compare_digest(sig, _sign(body)):
+            return None
+        data = json.loads(base64.urlsafe_b64decode(body.encode()))
+    except (ValueError, json.JSONDecodeError):
         return None
-    if not hmac.compare_digest(sig, _sign(f"{mobile}.{expires}")) or int(expires) < time.time():
-        return None
-    return mobile
+    return data if data.get("x", 0) > time.time() else None
+
+
+def read_profile(request):
+    """{m: mobile, b: business, o: owner, c: city, e: erp, t: [[name, mobile], ...]} or None."""
+    return _unpack(request.cookies.get(SESSION_COOKIE, ""))
+
+
+def with_profile(resp, profile, days=14):
+    profile = {**profile, "x": int(time.time()) + 60 * 60 * 24 * days}
+    resp.set_cookie(SESSION_COOKIE, _pack(profile), httponly=True, samesite="lax", max_age=60 * 60 * 24 * days)
+    return resp
+
+
+def tenant_for(mobile):
+    return "demo" if mobile == DEMO_MOBILE else "u" + hashlib.sha256(mobile.encode()).hexdigest()[:16]
+
+
+def open_workspace(profile):
+    """Point this request at the user's database, building their sample book if it isn't there yet."""
+    db.use_tenant(tenant_for(profile["m"]))
+    if db.business():
+        return
+    if profile["m"] == DEMO_MOBILE:
+        _ensure_demo()
+        return
+    contacts = [{"name": n, "mobile": m} for n, m in profile.get("t", [])]
+    seed = int(hashlib.sha256(profile["m"].encode()).hexdigest()[:8], 16)
+    sample_data.generate(profile["b"], profile["o"], profile["m"], profile.get("c") or "Ludhiana",
+                         profile.get("e") or "Busy", contacts, seed=seed)
+
+
+def live_allowed(mobile):
+    """Real calls spend the Sarvam account's credits, so only approved owner numbers may place them."""
+    allowed = {normalise_mobile(m) for m in os.environ.get("DHANDA_LIVE_USERS", "").split(",") if m.strip()}
+    return mobile in allowed
 
 
 def render(request, name, **ctx):
     business = db.business()
-    ctx.update(request=request, business=business, sarvam_ready=sarvam_va.configured(),
-               live_ready=sarvam_va.configured() and bool(business and business["test_numbers"]),
+    allowed = bool(business) and live_allowed(business["owner_mobile"])
+    ctx.update(request=request, business=business, sarvam_ready=sarvam_va.configured(), live_allowed=allowed,
+               live_ready=sarvam_va.configured() and allowed and bool(business and business["test_numbers"]),
                path=request.url.path)
     return templates.TemplateResponse(request, name, ctx)
 
 
-# ---------- Setup and login ----------
-
-@app.get("/setup", response_class=HTMLResponse)
-def setup_page(request: Request):
-    if db.business():
-        return RedirectResponse("/login", status_code=303)
-    return templates.TemplateResponse(request, "setup.html", {"request": request, "error": None})
-
-
-@app.post("/setup")
-def setup(request: Request, business_name: str = Form(...), owner_name: str = Form(...),
-          owner_mobile: str = Form(...), city: str = Form("Ludhiana"), erp: str = Form("Busy"),
-          test_numbers: str = Form("")):
-    if db.business():
-        return RedirectResponse("/login", status_code=303)
-    mobile = normalise_mobile(owner_mobile)
-    try:
-        tests = ledger.parse_contacts(test_numbers)
-    except ValueError:
-        tests = []
-    if not mobile:
-        return templates.TemplateResponse(request, "setup.html", {
-            "request": request, "error": "Enter a valid 10-digit Indian mobile number."})
-    sample_data.generate(business_name.strip(), owner_name.strip(), mobile, city.strip(), erp, tests)
-    return _start_session(mobile)
-
-
-def _start_session(mobile, days=14):
-    expires = int(time.time()) + 60 * 60 * 24 * days
-    token = f"{mobile}.{expires}.{_sign(f'{mobile}.{expires}')}"
-    resp = RedirectResponse("/dashboard", status_code=303)
-    resp.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax", max_age=60 * 60 * 24 * days)
-    return resp
-
+# ---------- Login and setup ----------
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
-    if not db.business():
-        return RedirectResponse("/setup", status_code=303)
-    return templates.TemplateResponse(request, "login.html", {"request": request, "stage": "mobile",
-                                                              "business": db.business()})
+    return templates.TemplateResponse(request, "login.html", {"request": request, "stage": "mobile"})
 
 
 @app.post("/login/send-otp", response_class=HTMLResponse)
 def send_otp(request: Request, mobile: str = Form(...)):
-    business = db.business()
     normalised = normalise_mobile(mobile)
-    ctx = {"request": request, "business": business, "mobile": normalised or mobile}
-    if normalised != business["owner_mobile"]:
+    if not normalised:
         return templates.TemplateResponse(request, "login.html", {
-            **ctx, "stage": "mobile", "error": "This number isn't registered as the owner's mobile."})
+            "request": request, "stage": "mobile", "mobile": mobile,
+            "error": "Enter a valid 10-digit Indian mobile number."})
     code = f"{secrets.randbelow(10**6):06d}"
-    expires = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
-    db.execute("INSERT OR REPLACE INTO otps (mobile, code, expires_at) VALUES (?,?,?)", (normalised, code, expires))
-    # No SMS gateway is connected in this MVP, so the code is shown on screen.
-    return templates.TemplateResponse(request, "login.html", {**ctx, "stage": "otp", "demo_code": code})
+    expires = int(time.time()) + 600
+    # The code travels signed (hashed) in the form, so verifying works on any server instance.
+    challenge = _pack({"m": normalised, "h": _sign(f"otp.{normalised}.{code}"), "x": expires})
+    # No SMS gateway is connected yet, so the code is shown on screen.
+    return templates.TemplateResponse(request, "login.html", {
+        "request": request, "stage": "otp", "mobile": normalised, "challenge": challenge, "demo_code": code})
 
 
 @app.post("/login/verify")
-def verify_otp(request: Request, mobile: str = Form(...), code: str = Form(...)):
-    otp = db.row("SELECT * FROM otps WHERE mobile = ?", (mobile,))
-    valid = otp and otp["code"] == code.strip() and datetime.fromisoformat(otp["expires_at"]) > datetime.now(timezone.utc)
-    if not valid:
+def verify_otp(request: Request, challenge: str = Form(...), code: str = Form(...)):
+    data = _unpack(challenge)
+    if not data or not hmac.compare_digest(data["h"], _sign(f"otp.{data['m']}.{code.strip()}")):
         return templates.TemplateResponse(request, "login.html", {
-            "request": request, "business": db.business(), "mobile": mobile, "stage": "otp",
+            "request": request, "stage": "otp", "mobile": (data or {}).get("m", ""), "challenge": challenge,
             "error": "That code is wrong or has expired."})
-    db.execute("DELETE FROM otps WHERE mobile = ?", (mobile,))
-    return _start_session(mobile)
+    mobile = data["m"]
+    previous = read_profile(request)
+    if previous and previous.get("m") == mobile and previous.get("b"):
+        return with_profile(RedirectResponse("/dashboard", status_code=303), previous)
+    db.use_tenant(tenant_for(mobile))
+    b = db.business()
+    if b:  # this server still has their workspace
+        profile = {"m": mobile, "b": b["name"], "o": b["owner_name"], "c": b["city"], "e": b["erp"],
+                   "t": [[c["name"], c["mobile"]] for c in b["test_numbers"]]}
+        return with_profile(RedirectResponse("/dashboard", status_code=303), profile)
+    return with_profile(RedirectResponse("/setup", status_code=303), {"m": mobile})
+
+
+@app.get("/setup", response_class=HTMLResponse)
+def setup_page(request: Request):
+    profile = read_profile(request)
+    if not profile:
+        return RedirectResponse("/login", status_code=303)
+    if profile.get("b"):
+        return RedirectResponse("/dashboard", status_code=303)
+    return templates.TemplateResponse(request, "setup.html", {"request": request, "error": None, "mobile": profile["m"]})
+
+
+@app.post("/setup")
+def setup(request: Request, business_name: str = Form(...), owner_name: str = Form(...),
+          city: str = Form("Ludhiana"), erp: str = Form("Busy")):
+    profile = read_profile(request)
+    if not profile:
+        return RedirectResponse("/login", status_code=303)
+    profile.update(b=business_name.strip()[:60], o=owner_name.strip()[:60], c=city.strip()[:40] or "Ludhiana",
+                   e=erp if erp in ("Busy", "Marg") else "Busy", t=profile.get("t", []))
+    db.use_tenant(tenant_for(profile["m"]))
+    seed = int(hashlib.sha256(profile["m"].encode()).hexdigest()[:8], 16)
+    sample_data.generate(profile["b"], profile["o"], profile["m"], profile["c"], profile["e"], [], seed=seed)
+    return with_profile(RedirectResponse("/dashboard", status_code=303), profile)
 
 
 @app.get("/logout")
 def logout(request: Request):
-    resp = RedirectResponse("/login", status_code=303)
+    resp = RedirectResponse("/", status_code=303)
     resp.delete_cookie(SESSION_COOKIE)
     return resp
+
+
+def _ensure_demo():
+    """The same demo book every time (fixed seed), so every instance shows identical data."""
+    if db.business():
+        return
+    sample_data.generate("Sandhu Traders", "Harpreet Sandhu", DEMO_MOBILE, "Ludhiana", "Busy", [], seed=2026)
+    overdue = [r["id"] for r in ledger.retailer_summaries() if r["overdue"] > 0]
+    calling.launch_campaign("Reminder round, 1st week", overdue[: len(overdue) // 2], "10:00", "19:00",
+                            upsell=True, live=False)
+
+
+@app.get("/demo")
+def demo(request: Request):
+    """One click into a ready-made sample business, for showing Dhanda AI to customers."""
+    if not demo_enabled():
+        return RedirectResponse("/login", status_code=303)
+    profile = {"m": DEMO_MOBILE, "b": "Sandhu Traders", "o": "Harpreet Sandhu", "c": "Ludhiana", "e": "Busy", "t": []}
+    open_workspace(profile)
+    return with_profile(RedirectResponse("/dashboard", status_code=303), profile, days=1)
 
 
 # ---------- Dashboard ----------
@@ -208,39 +270,12 @@ def call_stats(calls):
     }
 
 
-def _logged_in(request):
-    b = db.business()
-    return bool(b and _session_mobile(request) == b["owner_mobile"])
-
-
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
+    profile = read_profile(request)
     return templates.TemplateResponse(request, "home.html", {
-        "request": request, "logged_in": _logged_in(request), "has_business": bool(db.business()),
+        "request": request, "logged_in": bool(profile and profile.get("b")), "has_business": True,
         "demo": demo_enabled()})
-
-
-def _ensure_demo():
-    """The same demo book every time (fixed seed), so every instance shows identical data."""
-    if db.business():
-        return
-    sample_data.generate("Sandhu Traders", "Harpreet Sandhu", DEMO_MOBILE, "Ludhiana", "Busy", [], seed=2026)
-    overdue = [r["id"] for r in ledger.retailer_summaries() if r["overdue"] > 0]
-    calling.launch_campaign("Reminder round, 1st week", overdue[: len(overdue) // 2], "10:00", "19:00",
-                            upsell=True, live=False)
-
-
-@app.get("/demo")
-def demo(request: Request):
-    """One click into a ready-made sample business, for showing Dhanda AI to customers."""
-    if not demo_enabled():
-        return RedirectResponse("/setup", status_code=303)
-    b = db.business()
-    if not b:
-        _ensure_demo()
-    elif b["owner_mobile"] != DEMO_MOBILE:
-        return RedirectResponse("/login", status_code=303)
-    return _start_session(DEMO_MOBILE, days=1)
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
@@ -308,8 +343,9 @@ def retailer(request: Request, retailer_id: int):
 
 @app.post("/retailers/{retailer_id}/call")
 def retailer_call(retailer_id: int, live: str = Form("")):
+    live = live == "1" and sarvam_va.configured() and live_allowed(db.business()["owner_mobile"])
     try:
-        call_id = calling.call_now(retailer_id, live == "1" and sarvam_va.configured())
+        call_id = calling.call_now(retailer_id, live)
     except ValueError as exc:
         return go("/settings", error=exc)
     return RedirectResponse(f"/calls/{call_id}", status_code=303)
@@ -344,7 +380,7 @@ def campaign_new(request: Request, min_days: int = 1, risk: str = ""):
 async def campaign_create(request: Request):
     form = await request.form()
     ids = [int(x) for x in form.getlist("retailer_ids")]
-    live = form.get("mode") == "live" and sarvam_va.configured()
+    live = form.get("mode") == "live" and sarvam_va.configured() and live_allowed(db.business()["owner_mobile"])
     try:
         cid = calling.launch_campaign(form.get("name") or "Payment reminders", ids,
                                       form.get("window_start") or "10:00", form.get("window_end") or "19:00",
@@ -429,18 +465,19 @@ def settings(request: Request, error: str = "", saved: str = ""):
 
 
 @app.post("/settings")
-def settings_save(business_name: str = Form(...), owner_name: str = Form(...), owner_mobile: str = Form(...),
+def settings_save(request: Request, business_name: str = Form(...), owner_name: str = Form(...),
                   erp: str = Form("Busy"), test_numbers: str = Form("")):
-    mobile = normalise_mobile(owner_mobile)
-    if not mobile:
-        return go("/settings", error="Enter a valid 10-digit owner mobile.")
     try:
-        tests = ledger.parse_contacts(test_numbers)
+        tests = ledger.parse_contacts(test_numbers)[:20]
     except ValueError as exc:
         return go("/settings", error=exc)
-    db.execute("UPDATE business SET name = ?, owner_name = ?, owner_mobile = ?, erp = ?, test_numbers = ? WHERE id = 1",
-               (business_name.strip(), owner_name.strip(), mobile, erp, json.dumps(tests)))
-    return RedirectResponse("/settings?saved=1", status_code=303)
+    erp = erp if erp in ("Busy", "Marg") else "Busy"
+    db.execute("UPDATE business SET name = ?, owner_name = ?, erp = ?, test_numbers = ? WHERE id = 1",
+               (business_name.strip()[:60], owner_name.strip()[:60], erp, json.dumps(tests)))
+    # Keep the cookie profile in step, so other server instances rebuild the same settings.
+    profile = {**read_profile(request), "b": business_name.strip()[:60], "o": owner_name.strip()[:60], "e": erp,
+               "t": [[c["name"], c["mobile"]] for c in tests]}
+    return with_profile(RedirectResponse("/settings?saved=1", status_code=303), profile)
 
 
 @app.post("/settings/regenerate")
@@ -461,20 +498,23 @@ def agent(request: Request):
 
 # ---------- Live calls ----------
 
-_live_cache = {"at": 0.0, "items": [], "error": None}
+_live_cache = {}
 
 
-def _live_attempts():
-    """Recent attempts straight from Sarvam (cached a few seconds), so the view survives server restarts."""
-    import time
-    if time.time() - _live_cache["at"] < 5:
-        return _live_cache["items"], _live_cache["error"]
+def _live_attempts(owner_mobile):
+    """This business's recent attempts straight from Sarvam (cached a few seconds), so the view
+    survives server restarts. One Sarvam account serves every business, so filter by owner."""
+    cached = _live_cache.get(owner_mobile)
+    if cached and time.time() - cached["at"] < 5:
+        return cached["items"], cached["error"]
     items, error = [], None
     try:
         calling.sync_live_results()
         since = datetime.now(timezone.utc) - timedelta(hours=24)
         for a in sorted(sarvam_va.list_attempts(since), key=lambda a: a.get("attempted_at") or "", reverse=True):
             v = calling.normalise_vars(a.get("agent_variables"))
+            if not owner_mobile or v.get("owner_mobile") != owner_mobile:
+                continue
             items.append({
                 "when": a.get("attempted_at"), "phone": a.get("user_contact_masked") or "",
                 "shop": v.get("shop_name") or "—", "name": v.get("retailer_name") or "",
@@ -487,7 +527,7 @@ def _live_attempts():
             })
     except sarvam_va.SarvamError as exc:
         error = str(exc)
-    _live_cache.update(at=time.time(), items=items, error=error)
+    _live_cache[owner_mobile] = {"at": time.time(), "items": items, "error": error}
     return items, error
 
 
@@ -506,13 +546,18 @@ def live_api():
         p["dialed_number"] = (p["dialed_number"][:3] + "•••••" + p["dialed_number"][-4:]) if p["dialed_number"] else ""
     if not sarvam_va.configured():
         return JSONResponse({"configured": False, "pending": pending, "attempts": [], "error": None})
-    attempts, error = _live_attempts()
+    owner = db.business()["owner_mobile"]
+    attempts, error = _live_attempts(owner if live_allowed(owner) else "")
     return JSONResponse({"configured": True, "pending": pending, "attempts": attempts, "error": error,
                          "outcomes": calling.OUTCOMES})
 
 
 @app.get("/api/live/transcript")
 def live_transcript(interaction_id: str):
+    owner = db.business()["owner_mobile"]
+    known = _live_cache.get(owner, {}).get("items", [])
+    if interaction_id not in {a["interaction_id"] for a in known}:
+        return JSONResponse({"messages": [], "error": "Not one of your calls."})
     try:
         return JSONResponse({"messages": sarvam_va.get_transcript(interaction_id)})
     except sarvam_va.SarvamError as exc:

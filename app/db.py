@@ -2,11 +2,26 @@ import json
 import os
 import sqlite3
 from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 
-# Vercel functions can only write to /tmp, so the database there resets when the function restarts.
-DB_PATH = (Path("/tmp/dhanda/dhanda.db") if os.environ.get("VERCEL")
-           else Path(__file__).resolve().parent.parent / "data" / "dhanda.db")
+# Vercel functions can only write to /tmp, so the databases there reset when the function restarts.
+BASE_DIR = Path("/tmp/dhanda") if os.environ.get("VERCEL") else Path(__file__).resolve().parent.parent / "data"
+
+# Every logged-in business gets its own SQLite file; the request middleware picks which one.
+_tenant = ContextVar("tenant", default="default")
+
+
+def use_tenant(name):
+    _tenant.set(name)
+
+
+def tenant():
+    return _tenant.get()
+
+
+def db_path():
+    return BASE_DIR / f"{_tenant.get()}.db"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS business (
@@ -112,9 +127,10 @@ CREATE TABLE IF NOT EXISTS calls (
 
 
 def connect():
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    fresh = not DB_PATH.exists()
-    conn = sqlite3.connect(DB_PATH)
+    path = db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fresh = not path.exists()
+    conn = sqlite3.connect(path)
     if fresh:  # the file can disappear under a running server (e.g. /tmp cleanup on Vercel)
         conn.executescript(SCHEMA)
     conn.row_factory = sqlite3.Row
@@ -162,9 +178,4 @@ def business():
         # Test contacts: [{"name", "mobile"}]. Older rows stored bare numbers.
         b["test_numbers"] = [c if isinstance(c, dict) else {"name": "", "mobile": c}
                              for c in json.loads(b["test_numbers"])]
-        if not b["test_numbers"] and os.environ.get("DHANDA_TEST_CONTACTS"):
-            # On Vercel the database resets, so test contacts can live in an environment variable instead
-            # ("Rakesh, 98765 43210; Simran, 91234 56789").
-            from .ledger import parse_contacts
-            b["test_numbers"] = parse_contacts(os.environ["DHANDA_TEST_CONTACTS"].replace(";", "\n"))
     return b

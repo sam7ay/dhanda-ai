@@ -2,6 +2,7 @@
 import json
 import os
 import random
+import re
 from datetime import date, datetime, timedelta, timezone
 
 from . import db, ledger, sarvam_va
@@ -32,9 +33,7 @@ def webhook_secret():
 
 def _queue_call(retailer, business, dialed, mode, upsell, campaign_id=None, contact=None):
     variables = ledger.agent_variables(retailer, business, upsell=upsell)
-    if os.environ.get("DHANDA_OWNER_MOBILE"):
-        variables["owner_mobile"] = os.environ["DHANDA_OWNER_MOBILE"]
-    elif business["owner_mobile"] == DEMO_MOBILE:
+    if business["owner_mobile"] == DEMO_MOBILE:
         variables["owner_mobile"] = ""  # never hand a real call to the demo account's placeholder number
     if contact and contact.get("name"):
         # A real person is answering a sample retailer's call, so greet them by their own name.
@@ -96,12 +95,12 @@ def launch_campaign(name, retailer_ids, window_start, window_end, upsell, live, 
         created = sarvam_va.create_campaign(
             f"{name} #{campaign_id}", window_start, window_end, days=7, every_day=every_day,
             public_base_url=public_base_url(),
-            metadata={"dhanda_campaign": campaign_id, "token": webhook_secret()},
+            metadata={"dhanda_campaign": campaign_id, "tenant": db.tenant(), "token": webhook_secret()},
         )
         sarvam_id = created["campaign_id"]
         users = [{
             "user_phone_number": dialed,
-            "user_identifier": f"call-{call_id}",
+            "user_identifier": f"{db.tenant()}-call-{call_id}",
             "app_variables": variables,
             "app_overrides": {"initial_language_name": r["language"]},
         } for call_id, r, dialed, variables in queued]
@@ -133,7 +132,7 @@ def call_now(retailer_id, live):
     try:
         resp = sarvam_va.instant_call(dialed, variables, r["language"],
                                       public_base_url=public_base_url(),
-                                      metadata={"call_id": call_id, "token": webhook_secret()})
+                                      metadata={"call_id": call_id, "tenant": db.tenant(), "token": webhook_secret()})
         db.execute("UPDATE calls SET status = 'dialing', sarvam_attempt_id = ? WHERE id = ?",
                    (resp["attempt_id"], call_id))
     except (sarvam_va.SarvamError, KeyError) as exc:
@@ -204,7 +203,7 @@ def sync_live_results():
     if not pending:
         return 0
     since = min(datetime.fromisoformat(c["created_at"]) for c in pending) - timedelta(minutes=5)
-    wanted = {f"call-{c['id']}": c["id"] for c in pending}
+    wanted = {f"{db.tenant()}-call-{c['id']}": c["id"] for c in pending}
     by_attempt = {a["sarvam_attempt_id"]: a["id"] for a in
                   db.rows("SELECT id, sarvam_attempt_id FROM calls WHERE sarvam_attempt_id IS NOT NULL")}
     updated = 0
@@ -232,8 +231,13 @@ def handle_webhook(payload):
     if webhook_secret() and meta.get("token") != webhook_secret():
         return False
     ident = str(payload.get("user_identifier") or "")
-    call_id = meta.get("call_id") or (int(ident[5:]) if ident.startswith("call-") and ident[5:].isdigit() else None)
-    if not call_id:
+    tenant, _, num = ident.partition("-call-")
+    tenant = meta.get("tenant") or tenant
+    call_id = meta.get("call_id") or (int(num) if num.isdigit() else None)
+    if not call_id or not tenant or not re.fullmatch(r"[a-z0-9]{1,20}", tenant):
+        return False
+    db.use_tenant(tenant)
+    if not db.db_path().exists():
         return False
     transcript = [{"role": t.get("role"), "text": t.get("en_text")} for t in payload.get("interaction_transcript") or []]
     variables = {**(payload.get("final_agent_variables") or {}), **(payload.get("output_agent_variables") or {})}
