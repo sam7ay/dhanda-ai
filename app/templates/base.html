@@ -9,6 +9,7 @@
   "home": '<path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
   "shops": '<path d="M3 9l1.5-5h15L21 9M3 9h18M3 9v11h18V9M9 20v-6h6v6"/>',
   "calls": '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+  "live": '<circle cx="12" cy="12" r="3"/><path d="M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7"/>',
   "history": '<path d="M12 8v4l3 2M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/>',
   "books": '<path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zm0 0a2 2 0 0 0 2 2h13M8 7h7M8 11h7"/>',
   "assistant": '<path d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5 11a7 7 0 0 0 14 0M12 18v3"/>',
@@ -17,7 +18,7 @@
 <div class="shell">
   <nav class="side">
     <a class="logo" href="/dashboard"><span class="logo-mark">₹</span><span>Dhanda <span class="ai">AI</span></span></a>
-    {% set nav = [("/dashboard", "Home", "home"), ("/retailers", "Retailers", "shops"), ("/campaigns", "Reminder calls", "calls"),
+    {% set nav = [("/dashboard", "Home", "home"), ("/retailers", "Retailers", "shops"), ("/campaigns", "Reminder calls", "calls"), ("/live", "Live calls", "live"),
                   ("/calls", "Call history", "history"), ("/import", "Connect your books", "books"),
                   ("/agent", "Your assistant", "assistant"), ("/settings", "Settings", "settings")] %}
     {% for href, label, icon in nav %}

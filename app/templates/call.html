@@ -17,7 +17,7 @@
 
 {% if c.mode == "simulated" %}<div class="alert info">Practice call: no phone rang. This shows how the assistant would handle it (written in English).</div>{% endif %}
 {% if c.status == "failed" and c.summary %}<div class="alert">This call couldn't be placed. Please check your calling line in Settings.<details class="small" style="margin-top:6px;font-weight:500"><summary>Details for your technical team</summary>{{ c.summary }}</details></div>{% endif %}
-{% if c.mode == "live" and c.status in ("dialing", "scheduled", "queued") %}<div class="alert info">Calling your test phone {{ c.dialed_number | mask }} now. Press Refresh when the call ends.</div>{% endif %}
+{% if c.mode == "live" and c.status in ("dialing", "scheduled", "queued") %}<div class="alert info">Calling your test phone {{ c.dialed_number | mask }} now. <a href="/live">Watch it live →</a></div>{% endif %}
 
 <div class="grid g-wide">
   <div class="card">

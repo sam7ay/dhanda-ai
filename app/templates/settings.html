@@ -15,8 +15,9 @@
     <div class="field"><label>Accounts software</label>
       <div class="erp-pick choice">{% for e in ["Busy", "Marg"] %}<label><input type="radio" name="erp" value="{{ e }}" {{ 'checked' if business.erp == e }}> {{ e }}</label>{% endfor %}</div></div>
     <div class="field"><label>Phones for test calls</label>
-      <textarea name="test_numbers" placeholder="One number per line">{{ business.test_numbers | join('\n') }}</textarea>
-      <div class="hint">Real calls ring these phones instead of your retailers, so you can hear the assistant yourself first.</div></div>
+      <textarea name="test_numbers" rows="8" placeholder="One per line, e.g.&#10;Rakesh, 98765 43210&#10;Simran, 91234 56789">{% for c in business.test_numbers %}{{ c.name ~ ', ' if c.name }}{{ c.mobile }}
+{% endfor %}</textarea>
+      <div class="hint">Real calls only ever ring these phones. Each person gets one call, greeted by the name you write here. Only add people who have agreed to receive a test call.</div></div>
     <div class="field"><button class="btn primary big">Save</button></div>
   </form>
 

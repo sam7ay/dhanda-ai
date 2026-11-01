@@ -39,12 +39,13 @@
       <div class="field"><label>Name this round</label><input type="text" name="name" value="{{ default_name }}"></div>
       <div class="field"><label>Call between</label>
         <div class="row"><input type="time" name="window_start" value="10:00" style="width:auto"> to <input type="time" name="window_end" value="19:00" style="width:auto"></div>
-        <div class="hint">Monday to Saturday only.</div></div>
+        <label class="check" style="margin-top:10px"><input type="checkbox" name="every_day" value="1" {{ 'checked' if business.data_source == 'sample' }}><span>Include Sundays</span></label>
+        <div class="hint">Calls only go out in this time window. Right now it's <span id="now"></span>.</div></div>
       <div class="field"><label class="check"><input type="checkbox" name="upsell" value="1" checked><span>Also suggest products to reorder<small class="hint" style="display:block;font-weight:500">Only after payment is discussed, and never to shops that are very late.</small></span></label></div>
       <div class="field"><label>How should we call?</label>
         <div class="choice">
           <label><input type="radio" name="mode" value="simulated" {{ 'checked' if not live_ready }}><span>Practice run<small>See exactly what would happen. No phones ring.</small></span></label>
-          <label class="{{ 'off' if not live_ready }}"><input type="radio" name="mode" value="live" {{ 'checked' if live_ready }} {{ 'disabled' if not live_ready }}><span>Real calls to my test phone<small>{% if live_ready %}Every call rings {{ business.test_numbers|map('mask')|join(', ') }} so you can hear it yourself.{% else %}Needs your calling line switched on. <a href="/settings">Settings</a>{% endif %}</small></span></label>
+          <label class="{{ 'off' if not live_ready }}"><input type="radio" name="mode" value="live" {{ 'checked' if live_ready }} {{ 'disabled' if not live_ready }}><span>Real calls to my test phone<small>{% if live_ready %}Calls your {{ business.test_numbers|length }} test phone{{ 's' if business.test_numbers|length != 1 }}, one call each, using the first {{ business.test_numbers|length }} shops ticked.{% else %}Needs your calling line switched on. <a href="/settings">Settings</a>{% endif %}</small></span></label>
         </div>
       </div>
       <div class="field" style="border-top:1px solid var(--border);padding-top:14px">
@@ -67,5 +68,6 @@
   document.getElementById("all").addEventListener("change", e => { boxes.forEach(b => b.checked = e.target.checked); update(); });
   boxes.forEach(b => b.addEventListener("change", update));
   update();
+  document.getElementById("now").textContent = new Date().toLocaleString("en-IN", {weekday: "long", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata"});
 </script>
 {% endblock %}

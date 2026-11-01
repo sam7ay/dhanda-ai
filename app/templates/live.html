@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Live calls{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Live calls <span class="badge b-low" id="pulse">● Updating</span></h1>
+    <div class="muted" style="font-size:17px">Real calls from the last 24 hours. This page refreshes by itself every few seconds.</div></div>
+  <a class="btn primary big" href="/campaigns/new">📞 Start calls</a>
+</div>
+<div id="notice"></div>
+
+<div class="grid g4" id="kpis">
+  <div class="card kpi hero"><div class="label">Calls today</div><div class="value" id="k-total">—</div><div class="sub" id="k-pending"></div></div>
+  <div class="card kpi"><div class="label">Picked up</div><div class="value" id="k-connected">—</div><div class="sub">real conversations</div></div>
+  <div class="card kpi"><div class="label">Promised to pay</div><div class="value" style="color:var(--ok)" id="k-promised">—</div><div class="sub">gave a date</div></div>
+  <div class="card kpi"><div class="label">Asked for you</div><div class="value" id="k-transferred">—</div><div class="sub">handed to your phone</div></div>
+</div>
+
+<div class="grid g-wide mt">
+  <div class="card">
+    <h2>Calls</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>When</th><th>Who</th><th>Status</th><th class="right">Promised</th><th class="right">Length</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+    </table></div>
+  </div>
+  <div class="card">
+    <h2 id="t-title">Conversation</h2>
+    <div id="transcript" class="transcript"><div class="empty">Click a finished call to read what was said.</div></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const inr = v => { const n = Number(String(v).replace(/[^\d.]/g, "")); return n ? "₹" + Math.round(n).toLocaleString("en-IN") : "—"; };
+const when = iso => { if (!iso) return "—"; const d = new Date(iso.endsWith("Z") || iso.includes("+") ? iso : iso + "Z");
+  return d.toLocaleTimeString("en-IN", {hour: "numeric", minute: "2-digit"}) + ", " + d.toLocaleDateString("en-IN", {day: "numeric", month: "short"}); };
+let outcomes = {}, selected = null;
+
+async function load() {
+  try {
+    const r = await fetch("/api/live", {cache: "no-store"});
+    const d = await r.json();
+    outcomes = d.outcomes || outcomes;
+    $("notice").innerHTML = !d.configured
+      ? '<div class="alert info">Your calling line isn\'t switched on yet, so there are no real calls to show. Practice runs appear under Call history.</div>'
+      : d.error ? `<div class="alert warn">Couldn't reach Sarvam just now. Retrying… <span class="small">(${esc(d.error).slice(0, 160)})</span></div>` : "";
+    const a = d.attempts || [], p = d.pending || [];
+    $("k-total").textContent = a.length;
+    $("k-pending").textContent = p.length ? `${p.length} waiting to dial` : "all dialled";
+    $("k-connected").textContent = a.filter(x => x.connectivity === "connected").length;
+    $("k-promised").textContent = a.filter(x => ["promised", "partial"].includes(x.outcome)).length;
+    $("k-transferred").textContent = a.filter(x => x.outcome === "transferred").length;
+    const rows = [
+      ...p.map(x => `<tr><td class="nowrap">${when(x.created_at)}</td><td><b>${esc(x.shop_name)}</b><div class="sub">${esc(x.dialed_number)}</div></td>
+        <td><span class="badge b-dialing">${x.status === "dialing" ? "Ringing…" : "Waiting to dial"}</span></td><td class="right">—</td><td class="right">—</td></tr>`),
+      ...a.map((x, i) => `<tr class="click" data-i="${i}"><td class="nowrap">${when(x.when)}</td>
+        <td><b>${esc(x.shop)}</b><div class="sub">${esc(x.name)}${x.name ? " · " : ""}${esc(x.phone)}${x.language && x.language !== "UNKNOWN" ? " · " + esc(x.language) : ""}</div></td>
+        <td><span class="badge b-${esc(x.outcome || "queued")}">${esc(outcomes[x.outcome] || "In progress")}</span>${x.retry === "retry" ? ' <span class="badge">Will retry</span>' : ""}</td>
+        <td class="right num">${x.promised_amount ? inr(x.promised_amount) : "—"}${x.promised_date ? `<div class="sub">by ${esc(x.promised_date)}</div>` : ""}</td>
+        <td class="right num">${x.duration ? Math.round(x.duration) + "s" : "—"}</td></tr>`),
+    ];
+    $("rows").innerHTML = rows.join("") || '<tr><td colspan="5" class="empty">No real calls in the last 24 hours.</td></tr>';
+    document.querySelectorAll("#rows tr[data-i]").forEach(tr => tr.onclick = () => show(a[tr.dataset.i]));
+    $("pulse").textContent = "● Updated " + new Date().toLocaleTimeString("en-IN", {hour: "numeric", minute: "2-digit", second: "2-digit"});
+  } catch (e) { $("pulse").textContent = "● Reconnecting…"; }
+}
+
+async function show(x) {
+  $("t-title").textContent = x.shop;
+  if (!x.interaction_id) { $("transcript").innerHTML = '<div class="empty">This call didn\'t connect, so there\'s no conversation.</div>'; return; }
+  $("transcript").innerHTML = '<div class="empty">Loading…</div>';
+  const d = await (await fetch("/api/live/transcript?interaction_id=" + encodeURIComponent(x.interaction_id))).json();
+  const extra = [x.summary && `<div class="alert warn">${esc(x.summary)}</div>`, x.upsell && x.upsell !== "not_offered" && `<div class="alert info">Reorder interest: ${esc(x.upsell)}</div>`].filter(Boolean).join("");
+  $("transcript").innerHTML = extra + ((d.messages || []).map(m =>
+    `<div class="turn ${m.role === "agent" ? "agent" : "user"}"><div class="who">${m.role === "agent" ? "Dhanda AI" : "Retailer"}</div>${esc(m.text)}</div>`).join("")
+    || '<div class="empty">Transcript not ready yet. Try again in a minute.</div>');
+}
+
+load();
+setInterval(load, 6000);
+</script>
+{% endblock %}
