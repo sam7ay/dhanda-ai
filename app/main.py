@@ -474,7 +474,7 @@ def _live_attempts():
         calling.sync_live_results()
         since = datetime.now(timezone.utc) - timedelta(hours=24)
         for a in sorted(sarvam_va.list_attempts(since), key=lambda a: a.get("attempted_at") or "", reverse=True):
-            v = a.get("agent_variables") or {}
+            v = calling.normalise_vars(a.get("agent_variables"))
             items.append({
                 "when": a.get("attempted_at"), "phone": a.get("user_contact_masked") or "",
                 "shop": v.get("shop_name") or "—", "name": v.get("retailer_name") or "",

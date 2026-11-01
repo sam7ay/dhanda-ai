@@ -149,8 +149,25 @@ def _amount(value):
         return None
 
 
+# The agent's own labels (as set up in Sarvam) mapped onto ours.
+LABELS = {
+    "payment_status": {"disputed": "dispute", "busy_callback": "callback", "no_contact": "callback"},
+    "upsell_interest": {"interested": "yes", "not_interested": "no", "not_asked": "not_offered",
+                        "no_opportunity": "not_offered"},
+    "call_transferred": {"transferred": "yes", "owner_unavailable": "no", "not_needed": "no"},
+}
+
+
+def normalise_vars(variables):
+    v = dict(variables or {})
+    for key, mapping in LABELS.items():
+        if key in v and isinstance(v[key], str):
+            v[key] = mapping.get(v[key].strip().lower(), v[key].strip().lower())
+    return v
+
+
 def outcome_from(connectivity, variables, ended_by=None):
-    variables = variables or {}
+    variables = normalise_vars(variables)
     if connectivity in ("busy", "no_answer", "failed"):
         return connectivity
     if not connectivity:
@@ -164,7 +181,7 @@ def outcome_from(connectivity, variables, ended_by=None):
 def apply_result(call_id, *, connectivity, duration, language, variables, transcript, ended_by=None,
                  attempt_id=None, final=True):
     """Store one call outcome from a Sarvam webhook or the analytics API."""
-    variables = variables or {}
+    variables = normalise_vars(variables)
     outcome = outcome_from(connectivity, variables, ended_by)
     db.execute(
         """UPDATE calls SET status = ?, connectivity = ?, duration = ?, language = ?, outcome = ?,
