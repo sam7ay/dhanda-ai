@@ -266,7 +266,7 @@ def simulate(call_id, r, v):
     pay_by = date.today() + timedelta(days=rnd.choice([1, 2, 3, 5, 7]))
     overdue = r["overdue"] or r["outstanding"]
     promised = {"promised": overdue, "partial": round(overdue * rnd.choice([0.3, 0.4, 0.5]), -2)}.get(outcome)
-    pitch = v["upsell_allowed"] == "yes" and outcome in ("promised", "partial", "already_paid")
+    pitch = v["upsell_allowed"] in ("true", "yes") and outcome in ("promised", "partial", "already_paid")
     interest = rnd.choices(["yes", "maybe", "no"], weights=[35, 30, 35])[0] if pitch else "not_offered"
     products = v["reorder_products"] if v["reorder_products"] != "none" else v["recommended_products"]
     lines = _script(r, v, outcome, promised, pay_by, pitch, interest, products)

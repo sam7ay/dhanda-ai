@@ -50,6 +50,18 @@ def _request(method, url, **kwargs):
     return resp.json()
 
 
+def check():
+    """Can we reach Voice Agents with the key, org and workspace we have? Returns None or an error."""
+    for key in ("SARVAM_VA_API_KEY", "SARVAM_ORG_ID", "SARVAM_WORKSPACE_ID"):
+        if not os.environ.get(key):
+            return f"{key} is not set"
+    try:
+        _request("GET", f"{BASE}/scheduling/v1/{_scope()}/campaigns")
+    except SarvamError as exc:
+        return str(exc)[:300]
+    return None
+
+
 def _connection():
     return {"connection_id": _cfg("SARVAM_CONNECTION_ID"), "agent_phone_number": _cfg("SARVAM_AGENT_NUMBER")}
 

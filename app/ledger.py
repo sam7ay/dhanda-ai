@@ -187,5 +187,5 @@ def agent_variables(summary, business, upsell=True):
                          f"{date.fromisoformat(summary['last_payment']).strftime('%d %B')}") if summary["last_payment"] else "none",
         "reorder_products": "; ".join(s["name_hi"] for s in recs["reorder"]) or "none",
         "recommended_products": "; ".join(s["name_hi"] for s in recs["cross_sell"]) or "none",
-        "upsell_allowed": "yes" if (recs["reorder"] or recs["cross_sell"]) else "no",
+        "upsell_allowed": "true" if (recs["reorder"] or recs["cross_sell"]) else "false",
     }

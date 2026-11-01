@@ -460,6 +460,7 @@ def call_detail(request: Request, call_id: int):
 @app.get("/settings", response_class=HTMLResponse)
 def settings(request: Request, error: str = "", saved: str = ""):
     return render(request, "settings.html", missing=sarvam_va.missing(), error=error, saved=saved,
+                  key_check=sarvam_va.check(),
                   public_url=os.environ.get("PUBLIC_BASE_URL", ""),
                   agent_number=os.environ.get("SARVAM_AGENT_NUMBER", ""))
 
