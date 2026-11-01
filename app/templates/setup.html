@@ -12,12 +12,9 @@
       <h1>Tell us about your business</h1>
       <p class="muted">Takes one minute. We'll start you with a sample book so you can try everything right away.</p>
       {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+      <div class="alert ok">✓ Mobile verified: {{ mobile }}</div>
       <div class="field"><label>Business name</label><input type="text" name="business_name" required placeholder="e.g. Sandhu Traders"></div>
       <div class="field"><label>Your name</label><input type="text" name="owner_name" required placeholder="e.g. Harpreet Sandhu"></div>
-      <div class="field">
-        <label>Your mobile number</label><input type="tel" name="owner_mobile" required placeholder="98xxxxxxxx">
-        <div class="hint">You'll log in with this. When a retailer asks for the owner, the call comes here.</div>
-      </div>
       <div class="field"><label>Your city</label><input type="text" name="city" value="Ludhiana"></div>
       <div class="field"><label>Which software do you keep accounts in?</label>
         <div class="erp-pick choice">
@@ -25,9 +22,8 @@
           <label><input type="radio" name="erp" value="Marg"> Marg</label>
         </div>
       </div>
-      <input type="hidden" name="test_numbers" value="">
       <div class="field"><button class="btn primary big block">Continue</button></div>
-      <p class="small muted" style="margin-top:14px">Already set up? <a href="/login">Log in</a></p>
+      <p class="small muted" style="margin-top:14px">When a retailer asks for the owner, calls come to this mobile.</p>
     </form>
   </div>
 </div>

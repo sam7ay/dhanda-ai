@@ -10,8 +10,8 @@
     <h2>Your business</h2>
     <div class="field"><label>Business name</label><input type="text" name="business_name" value="{{ business.name }}" required></div>
     <div class="field"><label>Your name</label><input type="text" name="owner_name" value="{{ business.owner_name }}" required></div>
-    <div class="field"><label>Your mobile</label><input type="tel" name="owner_mobile" value="{{ business.owner_mobile }}" required>
-      <div class="hint">You log in with this. When a retailer asks for the owner, the call comes to this number.</div></div>
+    <div class="field"><label>Your mobile</label><input type="tel" value="{{ business.owner_mobile }}" disabled>
+      <div class="hint">This is your login. When a retailer asks for the owner, the call comes to this number.</div></div>
     <div class="field"><label>Accounts software</label>
       <div class="erp-pick choice">{% for e in ["Busy", "Marg"] %}<label><input type="radio" name="erp" value="{{ e }}" {{ 'checked' if business.erp == e }}> {{ e }}</label>{% endfor %}</div></div>
     <div class="field"><label>Phones for test calls</label>
@@ -24,8 +24,10 @@
   <div class="stack">
     <div class="card">
       <h2>Calling line</h2>
-      {% if not missing %}
+      {% if not missing and live_allowed %}
         <div class="alert ok" style="margin-bottom:0">✓ Switched on. Calls go out from {{ agent_number }}.</div>
+      {% elif not missing %}
+        <p class="muted">Real calls aren't switched on for your account yet. You can use practice runs, which show exactly what would happen. Contact us to switch on real calls.</p>
       {% else %}
         <p class="muted">Not switched on yet. Until then, every call is a practice run that shows what would happen. Our team switches this on for you.</p>
       {% endif %}

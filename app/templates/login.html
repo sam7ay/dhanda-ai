@@ -9,8 +9,8 @@
   {% include "_auth_side.html" %}
   <div class="auth-main">
     <div class="box">
-      <h1>Welcome back</h1>
-      <p class="muted">Log in to {{ business.name }}.</p>
+      <h1>Log in or sign up</h1>
+      <p class="muted">Use your mobile number. New here? We'll set up your business in a minute.</p>
       {% if error %}<div class="alert">{{ error }}</div>{% endif %}
       {% if stage == "mobile" %}
         <form method="post" action="/login/send-otp">
@@ -19,7 +19,7 @@
         </form>
       {% else %}
         <form method="post" action="/login/verify">
-          <input type="hidden" name="mobile" value="{{ mobile }}">
+          <input type="hidden" name="challenge" value="{{ challenge }}">
           <div class="field"><label>Enter the 6-digit code sent to {{ mobile | mask }}</label><input type="text" name="code" inputmode="numeric" maxlength="6" required autofocus style="font-size:24px;letter-spacing:.3em"></div>
           <div class="field"><button class="btn primary big block">Log in</button></div>
         </form>

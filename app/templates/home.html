@@ -6,7 +6,7 @@
   <meta name="description" content="Dhanda AI calls your retailers in Hindi or Punjabi, gets a payment date for overdue bills, and tells you who is ready to reorder. Works with Busy and Marg.">
 </head>
 <body class="site">
-{% set primary_href = "/dashboard" if logged_in else ("/demo" if demo else "/setup") %}
+{% set primary_href = "/dashboard" if logged_in else ("/demo" if demo else "/login") %}
 <header class="topbar">
   <div class="wrap">
     <a class="logo" href="/"><span class="logo-mark">₹</span><span>Dhanda <span class="ai">AI</span></span></a>
@@ -19,7 +19,7 @@
     {% if logged_in %}
       <a class="btn primary" href="/dashboard">Open my dashboard</a>
     {% else %}
-      {% if has_business %}<a class="btn" href="/login">Log in</a>{% endif %}
+      <a class="btn" href="/login">Log in</a>
       <a class="btn primary" href="{{ primary_href }}">{{ 'Try it free' if demo else 'Get started' }}</a>
     {% endif %}
   </div>
@@ -34,7 +34,7 @@
       <p class="hindi">उधार की वसूली अब आसान — आपकी तरफ़ से, आपकी भाषा में।</p>
       <div class="ctas">
         {% if demo %}<a class="btn big light" href="/demo">See it working →</a>{% endif %}
-        <a class="btn big {{ 'ghost' if demo else 'light' }}" href="{{ '/dashboard' if logged_in else '/setup' }}">Set up my business</a>
+        <a class="btn big {{ 'ghost' if demo else 'light' }}" href="{{ '/dashboard' if logged_in else '/login' }}">Sign up with my mobile</a>
       </div>
       <p class="note">Try free with a sample business ·Works with your Busy or Marg books · Nothing to install</p>
     </div>
